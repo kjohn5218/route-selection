@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
-import { LogIn, AlertCircle } from 'lucide-react';
+import { LogIn, AlertCircle, Truck, Shield, Users } from 'lucide-react';
 
 const Login = () => {
   const [email, setEmail] = useState('');
@@ -26,44 +26,57 @@ const Login = () => {
     }
   };
 
-  return (
-    <div className="min-h-screen flex items-center justify-center bg-gray-50 py-12 px-4 sm:px-6 lg:px-8">
-      <div className="max-w-md w-full space-y-8">
-        <div>
-          <h2 className="mt-6 text-center text-3xl font-extrabold text-gray-900">
-            Route Selection System
-          </h2>
-          <p className="mt-2 text-center text-sm text-gray-600">
-            Sign in to manage routes and selections
-          </p>
-        </div>
-        <form className="mt-8 space-y-6" onSubmit={handleSubmit}>
-          {error && (
-            <div className="flex items-center gap-2 p-4 bg-red-50 border border-red-200 rounded-lg">
-              <AlertCircle className="w-5 h-5 text-red-600" />
-              <p className="text-sm text-red-800">{error}</p>
-            </div>
-          )}
+  const setDemoCredentials = (email: string, password: string) => {
+    setEmail(email);
+    setPassword(password);
+  };
 
-          <div className="rounded-md shadow-sm -space-y-px">
+  return (
+    <div className="min-h-screen flex">
+      {/* Left Panel - Login Form */}
+      <div className="flex-1 flex items-center justify-center bg-gray-50 px-4 sm:px-6 lg:px-8">
+        <div className="max-w-md w-full">
+          <div className="text-center mb-10 animate-fade-in">
+            <div className="flex justify-center mb-4">
+              <div className="bg-primary-100 p-3 rounded-full">
+                <Truck className="h-8 w-8 text-primary-600" />
+              </div>
+            </div>
+            <h2 className="text-3xl font-bold text-gray-900">
+              Welcome Back
+            </h2>
+            <p className="mt-2 text-gray-600">
+              Sign in to manage routes and selections
+            </p>
+          </div>
+
+          <form className="space-y-6 animate-slide-up" onSubmit={handleSubmit}>
+            {error && (
+              <div className="flex items-center gap-3 p-4 bg-red-50 border border-red-200 rounded-lg animate-slide-down">
+                <AlertCircle className="w-5 h-5 text-red-600 flex-shrink-0" />
+                <p className="text-sm text-red-800">{error}</p>
+              </div>
+            )}
+
             <div>
-              <label htmlFor="email-address" className="sr-only">
-                Email address
+              <label htmlFor="email" className="label">
+                Email Address
               </label>
               <input
-                id="email-address"
+                id="email"
                 name="email"
                 type="email"
                 autoComplete="email"
                 required
                 value={email}
                 onChange={(e) => setEmail(e.target.value)}
-                className="appearance-none rounded-none relative block w-full px-3 py-2 border border-gray-300 placeholder-gray-500 text-gray-900 rounded-t-md focus:outline-none focus:ring-blue-500 focus:border-blue-500 focus:z-10 sm:text-sm"
-                placeholder="Email address"
+                className="input-field"
+                placeholder="Enter your email"
               />
             </div>
+
             <div>
-              <label htmlFor="password" className="sr-only">
+              <label htmlFor="password" className="label">
                 Password
               </label>
               <input
@@ -74,51 +87,138 @@ const Login = () => {
                 required
                 value={password}
                 onChange={(e) => setPassword(e.target.value)}
-                className="appearance-none rounded-none relative block w-full px-3 py-2 border border-gray-300 placeholder-gray-500 text-gray-900 rounded-b-md focus:outline-none focus:ring-blue-500 focus:border-blue-500 focus:z-10 sm:text-sm"
-                placeholder="Password"
+                className="input-field"
+                placeholder="Enter your password"
               />
             </div>
-          </div>
 
-          <div>
             <button
               type="submit"
               disabled={isLoading}
-              className="group relative w-full flex justify-center py-2 px-4 border border-transparent text-sm font-medium rounded-md text-white bg-blue-600 hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 disabled:opacity-50 disabled:cursor-not-allowed"
+              className="w-full btn-primary py-3 text-base flex items-center justify-center gap-2"
             >
-              <span className="absolute left-0 inset-y-0 flex items-center pl-3">
-                <LogIn className="h-5 w-5 text-blue-500 group-hover:text-blue-400" aria-hidden="true" />
-              </span>
-              {isLoading ? 'Signing in...' : 'Sign in'}
+              {isLoading ? (
+                <div className="w-5 h-5 border-2 border-white border-t-transparent rounded-full animate-spin" />
+              ) : (
+                <>
+                  <LogIn className="w-5 h-5" />
+                  Sign In
+                </>
+              )}
             </button>
-          </div>
+          </form>
 
-          <div className="mt-6">
+          {/* Demo Credentials */}
+          <div className="mt-8">
             <div className="relative">
               <div className="absolute inset-0 flex items-center">
-                <div className="w-full border-t border-gray-300" />
+                <div className="w-full border-t border-gray-200" />
               </div>
               <div className="relative flex justify-center text-sm">
-                <span className="px-2 bg-gray-50 text-gray-500">Demo Credentials</span>
+                <span className="px-4 bg-gray-50 text-gray-500">
+                  Quick Access - Demo Accounts
+                </span>
               </div>
             </div>
 
-            <div className="mt-6 grid grid-cols-1 gap-3 text-sm">
-              <div className="bg-gray-100 p-3 rounded">
-                <p className="font-medium">Admin</p>
-                <p className="text-gray-600">admin@example.com / password</p>
+            <div className="mt-6 grid grid-cols-1 gap-3">
+              <button
+                type="button"
+                onClick={() => setDemoCredentials('admin@example.com', 'password')}
+                className="group relative flex items-center gap-4 p-4 bg-white border border-gray-200 rounded-lg hover:border-primary-300 hover:shadow-md transition-all duration-200"
+              >
+                <div className="bg-primary-100 p-2 rounded-lg group-hover:bg-primary-200 transition-colors">
+                  <Shield className="w-5 h-5 text-primary-700" />
+                </div>
+                <div className="text-left">
+                  <p className="font-medium text-gray-900">Administrator</p>
+                  <p className="text-sm text-gray-500">Full system access</p>
+                </div>
+                <LogIn className="w-4 h-4 text-gray-400 ml-auto group-hover:text-primary-600 transition-colors" />
+              </button>
+
+              <button
+                type="button"
+                onClick={() => setDemoCredentials('manager@example.com', 'password')}
+                className="group relative flex items-center gap-4 p-4 bg-white border border-gray-200 rounded-lg hover:border-green-300 hover:shadow-md transition-all duration-200"
+              >
+                <div className="bg-green-100 p-2 rounded-lg group-hover:bg-green-200 transition-colors">
+                  <Users className="w-5 h-5 text-green-700" />
+                </div>
+                <div className="text-left">
+                  <p className="font-medium text-gray-900">Manager</p>
+                  <p className="text-sm text-gray-500">Manage routes & employees</p>
+                </div>
+                <LogIn className="w-4 h-4 text-gray-400 ml-auto group-hover:text-green-600 transition-colors" />
+              </button>
+
+              <button
+                type="button"
+                onClick={() => setDemoCredentials('driver@example.com', 'password')}
+                className="group relative flex items-center gap-4 p-4 bg-white border border-gray-200 rounded-lg hover:border-purple-300 hover:shadow-md transition-all duration-200"
+              >
+                <div className="bg-purple-100 p-2 rounded-lg group-hover:bg-purple-200 transition-colors">
+                  <Truck className="w-5 h-5 text-purple-700" />
+                </div>
+                <div className="text-left">
+                  <p className="font-medium text-gray-900">Driver</p>
+                  <p className="text-sm text-gray-500">View & select routes</p>
+                </div>
+                <LogIn className="w-4 h-4 text-gray-400 ml-auto group-hover:text-purple-600 transition-colors" />
+              </button>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      {/* Right Panel - Feature Showcase */}
+      <div className="hidden lg:flex lg:flex-1 bg-gradient-to-br from-primary-600 to-primary-800 items-center justify-center p-12">
+        <div className="max-w-lg text-white animate-fade-in">
+          <h1 className="text-4xl font-bold mb-6">
+            Route Selection System
+          </h1>
+          <p className="text-lg text-primary-100 mb-8">
+            Streamline your bi-annual route selection process with our comprehensive management system.
+          </p>
+          
+          <div className="space-y-6">
+            <div className="flex items-start gap-4">
+              <div className="bg-white/20 p-2 rounded-lg flex-shrink-0">
+                <Users className="w-6 h-6" />
               </div>
-              <div className="bg-gray-100 p-3 rounded">
-                <p className="font-medium">Manager</p>
-                <p className="text-gray-600">manager@example.com / password</p>
+              <div>
+                <h3 className="font-semibold text-lg mb-1">Seniority-Based Selection</h3>
+                <p className="text-primary-100">
+                  Fair and transparent route assignment based on employee seniority
+                </p>
               </div>
-              <div className="bg-gray-100 p-3 rounded">
-                <p className="font-medium">Driver</p>
-                <p className="text-gray-600">driver@example.com / password</p>
+            </div>
+
+            <div className="flex items-start gap-4">
+              <div className="bg-white/20 p-2 rounded-lg flex-shrink-0">
+                <Truck className="w-6 h-6" />
+              </div>
+              <div>
+                <h3 className="font-semibold text-lg mb-1">Comprehensive Route Management</h3>
+                <p className="text-primary-100">
+                  Easily manage all routes, schedules, and special requirements
+                </p>
+              </div>
+            </div>
+
+            <div className="flex items-start gap-4">
+              <div className="bg-white/20 p-2 rounded-lg flex-shrink-0">
+                <Shield className="w-6 h-6" />
+              </div>
+              <div>
+                <h3 className="font-semibold text-lg mb-1">Secure & Reliable</h3>
+                <p className="text-primary-100">
+                  Role-based access control ensures data security and integrity
+                </p>
               </div>
             </div>
           </div>
-        </form>
+        </div>
       </div>
     </div>
   );
