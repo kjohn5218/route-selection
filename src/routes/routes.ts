@@ -1,0 +1,314 @@
+import { Router, Request, Response } from 'express';
+import { z } from 'zod';
+import prisma from '../utils/database.js';
+import { authenticateToken, requireAdmin } from '../middleware/auth.js';
+import { RouteFilters } from '../types/index.js';
+
+const router = Router();
+
+const createRouteSchema = z.object({
+  runNumber: z.string(),
+  type: z.enum(['LOCAL', 'REGIONAL', 'LONG_HAUL', 'DEDICATED']),
+  origin: z.string(),
+  destination: z.string(),
+  days: z.string(),
+  startTime: z.string(),
+  endTime: z.string(),
+  distance: z.number(),
+  rateType: z.enum(['HOURLY', 'MILEAGE', 'SALARY']),
+  workTime: z.number(),
+  requiresDoublesEndorsement: z.boolean().default(false),
+  requiresChainExperience: z.boolean().default(false),
+  isActive: z.boolean().default(true),
+});
+
+const updateRouteSchema = createRouteSchema.partial();
+
+// GET /api/routes - Get all routes with optional filtering
+router.get('/', authenticateToken, async (req: Request, res: Response) => {
+  try {
+    const {
+      type,
+      requiresDoublesEndorsement,
+      requiresChainExperience,
+      searchTerm,
+      isActive = 'true',
+    } = req.query;
+
+    const where: any = {};
+
+    if (isActive) {
+      where.isActive = isActive === 'true';
+    }
+
+    if (type) {
+      where.type = type;
+    }
+
+    if (requiresDoublesEndorsement) {
+      where.requiresDoublesEndorsement = requiresDoublesEndorsement === 'true';
+    }
+
+    if (requiresChainExperience) {
+      where.requiresChainExperience = requiresChainExperience === 'true';
+    }
+
+    if (searchTerm) {
+      const searchString = searchTerm as string;
+      where.OR = [
+        { runNumber: { contains: searchString, mode: 'insensitive' } },
+        { origin: { contains: searchString, mode: 'insensitive' } },
+        { destination: { contains: searchString, mode: 'insensitive' } },
+      ];
+    }
+
+    const routes = await prisma.route.findMany({
+      where,
+      orderBy: { runNumber: 'asc' },
+      include: {
+        currentEmployees: {
+          select: {
+            id: true,
+            firstName: true,
+            lastName: true,
+            employeeId: true,
+          },
+        },
+        assignments: {
+          where: {
+            selectionPeriod: {
+              status: 'COMPLETED',
+            },
+          },
+          orderBy: {
+            createdAt: 'desc',
+          },
+          take: 1,
+          include: {
+            employee: {
+              select: {
+                id: true,
+                firstName: true,
+                lastName: true,
+                employeeId: true,
+              },
+            },
+          },
+        },
+      },
+    });
+
+    res.json(routes);
+  } catch (error) {
+    console.error('Get routes error:', error);
+    res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
+// GET /api/routes/:id - Get single route
+router.get('/:id', authenticateToken, async (req: Request, res: Response) => {
+  try {
+    const route = await prisma.route.findUnique({
+      where: { id: req.params.id },
+      include: {
+        currentEmployees: {
+          select: {
+            id: true,
+            firstName: true,
+            lastName: true,
+            employeeId: true,
+            hireDate: true,
+          },
+        },
+        assignments: {
+          include: {
+            employee: {
+              select: {
+                id: true,
+                firstName: true,
+                lastName: true,
+                employeeId: true,
+              },
+            },
+            selectionPeriod: {
+              select: {
+                id: true,
+                name: true,
+                status: true,
+              },
+            },
+          },
+          orderBy: {
+            createdAt: 'desc',
+          },
+        },
+      },
+    });
+
+    if (!route) {
+      return res.status(404).json({ error: 'Route not found' });
+    }
+
+    res.json(route);
+  } catch (error) {
+    console.error('Get route error:', error);
+    res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
+// POST /api/routes - Create new route (Admin only)
+router.post('/', authenticateToken, requireAdmin, async (req: Request, res: Response) => {
+  try {
+    const data = createRouteSchema.parse(req.body);
+
+    // Check if run number already exists
+    const existingRoute = await prisma.route.findUnique({
+      where: { runNumber: data.runNumber },
+    });
+
+    if (existingRoute) {
+      return res.status(409).json({ error: 'Route with this run number already exists' });
+    }
+
+    const route = await prisma.route.create({
+      data,
+    });
+
+    res.status(201).json(route);
+  } catch (error) {
+    console.error('Create route error:', error);
+    if (error instanceof z.ZodError) {
+      return res.status(400).json({ error: 'Invalid input', details: error.errors });
+    }
+    res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
+// PUT /api/routes/:id - Update route (Admin only)
+router.put('/:id', authenticateToken, requireAdmin, async (req: Request, res: Response) => {
+  try {
+    const data = updateRouteSchema.parse(req.body);
+
+    // Check if route exists
+    const existingRoute = await prisma.route.findUnique({
+      where: { id: req.params.id },
+    });
+
+    if (!existingRoute) {
+      return res.status(404).json({ error: 'Route not found' });
+    }
+
+    // Check if run number is being changed and if it conflicts
+    if (data.runNumber && data.runNumber !== existingRoute.runNumber) {
+      const conflictingRoute = await prisma.route.findUnique({
+        where: { runNumber: data.runNumber },
+      });
+
+      if (conflictingRoute) {
+        return res.status(409).json({ error: 'Route with this run number already exists' });
+      }
+    }
+
+    const route = await prisma.route.update({
+      where: { id: req.params.id },
+      data,
+    });
+
+    res.json(route);
+  } catch (error) {
+    console.error('Update route error:', error);
+    if (error instanceof z.ZodError) {
+      return res.status(400).json({ error: 'Invalid input', details: error.errors });
+    }
+    res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
+// DELETE /api/routes/:id - Delete route (Admin only)
+router.delete('/:id', authenticateToken, requireAdmin, async (req: Request, res: Response) => {
+  try {
+    // Check if route exists
+    const existingRoute = await prisma.route.findUnique({
+      where: { id: req.params.id },
+      include: {
+        assignments: true,
+        firstChoiceSelections: true,
+        secondChoiceSelections: true,
+        thirdChoiceSelections: true,
+      },
+    });
+
+    if (!existingRoute) {
+      return res.status(404).json({ error: 'Route not found' });
+    }
+
+    // Check if route has any assignments or selections
+    const hasAssignments = existingRoute.assignments.length > 0;
+    const hasSelections = 
+      existingRoute.firstChoiceSelections.length > 0 ||
+      existingRoute.secondChoiceSelections.length > 0 ||
+      existingRoute.thirdChoiceSelections.length > 0;
+
+    if (hasAssignments || hasSelections) {
+      return res.status(409).json({ 
+        error: 'Cannot delete route with existing assignments or selections. Consider deactivating instead.' 
+      });
+    }
+
+    await prisma.route.delete({
+      where: { id: req.params.id },
+    });
+
+    res.status(204).send();
+  } catch (error) {
+    console.error('Delete route error:', error);
+    res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
+// GET /api/routes/available/:selectionPeriodId - Get available routes for selection period
+router.get('/available/:selectionPeriodId', authenticateToken, async (req: Request, res: Response) => {
+  try {
+    const { selectionPeriodId } = req.params;
+
+    // Check if selection period exists and is open
+    const selectionPeriod = await prisma.selectionPeriod.findUnique({
+      where: { id: selectionPeriodId },
+    });
+
+    if (!selectionPeriod) {
+      return res.status(404).json({ error: 'Selection period not found' });
+    }
+
+    if (selectionPeriod.status !== 'OPEN') {
+      return res.status(400).json({ error: 'Selection period is not open' });
+    }
+
+    // Get routes that are active and not yet assigned for this period
+    const assignedRouteIds = await prisma.assignment.findMany({
+      where: { selectionPeriodId },
+      select: { routeId: true },
+    });
+
+    const assignedIds = assignedRouteIds
+      .filter(a => a.routeId)
+      .map(a => a.routeId as string);
+
+    const availableRoutes = await prisma.route.findMany({
+      where: {
+        isActive: true,
+        id: {
+          notIn: assignedIds,
+        },
+      },
+      orderBy: { runNumber: 'asc' },
+    });
+
+    res.json(availableRoutes);
+  } catch (error) {
+    console.error('Get available routes error:', error);
+    res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
+export default router;

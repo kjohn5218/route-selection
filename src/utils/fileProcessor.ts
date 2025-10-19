@@ -1,0 +1,329 @@
+import * as XLSX from 'xlsx';
+import * as Papa from 'papaparse';
+import { z } from 'zod';
+
+// Define schemas for import validation
+const routeImportSchema = z.object({
+  runNumber: z.string(),
+  type: z.enum(['LOCAL', 'REGIONAL', 'LONG_HAUL', 'DEDICATED']),
+  origin: z.string(),
+  destination: z.string(),
+  days: z.string(),
+  startTime: z.string(),
+  endTime: z.string(),
+  distance: z.number(),
+  rateType: z.enum(['HOURLY', 'MILEAGE', 'SALARY']),
+  workTime: z.number(),
+  requiresDoublesEndorsement: z.boolean().default(false),
+  requiresChainExperience: z.boolean().default(false),
+  isActive: z.boolean().default(true),
+});
+
+const employeeImportSchema = z.object({
+  employeeId: z.string(),
+  firstName: z.string(),
+  lastName: z.string(),
+  email: z.string().email(),
+  phone: z.string().optional(),
+  hireDate: z.string().transform(str => new Date(str)),
+  doublesEndorsement: z.boolean().default(false),
+  chainExperience: z.boolean().default(false),
+  isEligible: z.boolean().default(true),
+});
+
+export interface ImportResult<T> {
+  success: boolean;
+  data: T[];
+  errors: Array<{
+    row: number;
+    field?: string;
+    message: string;
+  }>;
+  summary: {
+    totalRows: number;
+    validRows: number;
+    errorRows: number;
+  };
+}
+
+export class FileProcessor {
+  static parseExcel(buffer: Buffer): any[] {
+    const workbook = XLSX.read(buffer, { type: 'buffer' });
+    const sheetName = workbook.SheetNames[0];
+    const worksheet = workbook.Sheets[sheetName];
+    return XLSX.utils.sheet_to_json(worksheet);
+  }
+
+  static parseCSV(content: string): any[] {
+    const result = Papa.parse(content, {
+      header: true,
+      skipEmptyLines: true,
+      transformHeader: (header) => header.trim(),
+    });
+
+    if (result.errors.length > 0) {
+      throw new Error(`CSV parsing error: ${result.errors[0].message}`);
+    }
+
+    return result.data;
+  }
+
+  static validateRoutes(rawData: any[]): ImportResult<any> {
+    const errors: Array<{ row: number; field?: string; message: string }> = [];
+    const validData: any[] = [];
+
+    rawData.forEach((row, index) => {
+      try {
+        // Convert string values to appropriate types
+        const processedRow = {
+          ...row,
+          distance: this.parseNumber(row.distance, `Row ${index + 1}: distance`),
+          workTime: this.parseNumber(row.workTime, `Row ${index + 1}: workTime`),
+          requiresDoublesEndorsement: this.parseBoolean(row.requiresDoublesEndorsement),
+          requiresChainExperience: this.parseBoolean(row.requiresChainExperience),
+          isActive: row.isActive !== undefined ? this.parseBoolean(row.isActive) : true,
+        };
+
+        const validatedRow = routeImportSchema.parse(processedRow);
+        validData.push(validatedRow);
+      } catch (error) {
+        if (error instanceof z.ZodError) {
+          error.errors.forEach(err => {
+            errors.push({
+              row: index + 1,
+              field: err.path.join('.'),
+              message: err.message,
+            });
+          });
+        } else {
+          errors.push({
+            row: index + 1,
+            message: `Validation error: ${error instanceof Error ? error.message : 'Unknown error'}`,
+          });
+        }
+      }
+    });
+
+    return {
+      success: errors.length === 0,
+      data: validData,
+      errors,
+      summary: {
+        totalRows: rawData.length,
+        validRows: validData.length,
+        errorRows: errors.length,
+      },
+    };
+  }
+
+  static validateEmployees(rawData: any[]): ImportResult<any> {
+    const errors: Array<{ row: number; field?: string; message: string }> = [];
+    const validData: any[] = [];
+
+    rawData.forEach((row, index) => {
+      try {
+        // Convert string values to appropriate types
+        const processedRow = {
+          ...row,
+          hireDate: row.hireDate,
+          doublesEndorsement: this.parseBoolean(row.doublesEndorsement),
+          chainExperience: this.parseBoolean(row.chainExperience),
+          isEligible: row.isEligible !== undefined ? this.parseBoolean(row.isEligible) : true,
+        };
+
+        const validatedRow = employeeImportSchema.parse(processedRow);
+        validData.push(validatedRow);
+      } catch (error) {
+        if (error instanceof z.ZodError) {
+          error.errors.forEach(err => {
+            errors.push({
+              row: index + 1,
+              field: err.path.join('.'),
+              message: err.message,
+            });
+          });
+        } else {
+          errors.push({
+            row: index + 1,
+            message: `Validation error: ${error instanceof Error ? error.message : 'Unknown error'}`,
+          });
+        }
+      }
+    });
+
+    return {
+      success: errors.length === 0,
+      data: validData,
+      errors,
+      summary: {
+        totalRows: rawData.length,
+        validRows: validData.length,
+        errorRows: errors.length,
+      },
+    };
+  }
+
+  static generateExcel(data: any[], filename: string): Buffer {
+    const worksheet = XLSX.utils.json_to_sheet(data);
+    const workbook = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(workbook, worksheet, 'Data');
+    
+    // Auto-size columns
+    const columnWidths = this.calculateColumnWidths(data);
+    worksheet['!cols'] = columnWidths;
+
+    return XLSX.write(workbook, { type: 'buffer', bookType: 'xlsx' });
+  }
+
+  static generateCSV(data: any[]): string {
+    return Papa.unparse(data, {
+      header: true,
+      skipEmptyLines: true,
+    });
+  }
+
+  static generateRouteTemplate(): Buffer {
+    const template = [
+      {
+        runNumber: 'R001',
+        type: 'LOCAL',
+        origin: 'Seattle Terminal',
+        destination: 'Tacoma Warehouse',
+        days: 'Mon-Fri',
+        startTime: '06:00',
+        endTime: '14:00',
+        distance: 45.5,
+        rateType: 'HOURLY',
+        workTime: 8.0,
+        requiresDoublesEndorsement: false,
+        requiresChainExperience: false,
+        isActive: true,
+      },
+    ];
+
+    return this.generateExcel(template, 'route_template');
+  }
+
+  static generateEmployeeTemplate(): Buffer {
+    const template = [
+      {
+        employeeId: 'EMP001',
+        firstName: 'John',
+        lastName: 'Smith',
+        email: 'john.smith@company.com',
+        phone: '206-555-0123',
+        hireDate: '2020-01-15',
+        doublesEndorsement: true,
+        chainExperience: false,
+        isEligible: true,
+      },
+    ];
+
+    return this.generateExcel(template, 'employee_template');
+  }
+
+  private static parseNumber(value: any, context: string): number {
+    if (typeof value === 'number') return value;
+    if (typeof value === 'string') {
+      const parsed = parseFloat(value);
+      if (isNaN(parsed)) {
+        throw new Error(`${context}: Invalid number format`);
+      }
+      return parsed;
+    }
+    throw new Error(`${context}: Expected number`);
+  }
+
+  private static parseBoolean(value: any): boolean {
+    if (typeof value === 'boolean') return value;
+    if (typeof value === 'string') {
+      const lower = value.toLowerCase().trim();
+      if (lower === 'true' || lower === 'yes' || lower === '1') return true;
+      if (lower === 'false' || lower === 'no' || lower === '0') return false;
+    }
+    if (typeof value === 'number') {
+      return value !== 0;
+    }
+    return false;
+  }
+
+  private static calculateColumnWidths(data: any[]): any[] {
+    if (data.length === 0) return [];
+
+    const headers = Object.keys(data[0]);
+    const widths = headers.map(header => {
+      let maxWidth = header.length;
+      
+      data.forEach(row => {
+        const cellValue = String(row[header] || '');
+        maxWidth = Math.max(maxWidth, cellValue.length);
+      });
+
+      return { width: Math.min(maxWidth + 2, 50) }; // Cap at 50 characters
+    });
+
+    return widths;
+  }
+
+  static async processRouteFile(file: Buffer, filename: string): Promise<ImportResult<any>> {
+    try {
+      let rawData: any[];
+
+      if (filename.endsWith('.xlsx') || filename.endsWith('.xls')) {
+        rawData = this.parseExcel(file);
+      } else if (filename.endsWith('.csv')) {
+        const content = file.toString('utf-8');
+        rawData = this.parseCSV(content);
+      } else {
+        throw new Error('Unsupported file format. Please use .xlsx, .xls, or .csv');
+      }
+
+      return this.validateRoutes(rawData);
+    } catch (error) {
+      return {
+        success: false,
+        data: [],
+        errors: [{
+          row: 0,
+          message: `File processing error: ${error instanceof Error ? error.message : 'Unknown error'}`,
+        }],
+        summary: {
+          totalRows: 0,
+          validRows: 0,
+          errorRows: 1,
+        },
+      };
+    }
+  }
+
+  static async processEmployeeFile(file: Buffer, filename: string): Promise<ImportResult<any>> {
+    try {
+      let rawData: any[];
+
+      if (filename.endsWith('.xlsx') || filename.endsWith('.xls')) {
+        rawData = this.parseExcel(file);
+      } else if (filename.endsWith('.csv')) {
+        const content = file.toString('utf-8');
+        rawData = this.parseCSV(content);
+      } else {
+        throw new Error('Unsupported file format. Please use .xlsx, .xls, or .csv');
+      }
+
+      return this.validateEmployees(rawData);
+    } catch (error) {
+      return {
+        success: false,
+        data: [],
+        errors: [{
+          row: 0,
+          message: `File processing error: ${error instanceof Error ? error.message : 'Unknown error'}`,
+        }],
+        summary: {
+          totalRows: 0,
+          validRows: 0,
+          errorRows: 1,
+        },
+      };
+    }
+  }
+}

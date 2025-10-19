@@ -1,0 +1,665 @@
+Route Selection System - Complete Development Specification
+Project Overview
+Build a web-based Route Selection System for managing bi-annual driver route assignments based on seniority.
+The system consists of an admin portal for operations management and a mobile-responsive portal for drivers to
+submit route preferences.
+Technology Stack
+Frontend
+Framework: React 18+ with TypeScript
+Styling: Tailwind CSS
+State Management: React Context API + useState/useReducer
+Forms: React Hook Form
+Data Tables: TanStack Table (React Table v8)
+File Upload: React Dropzone
+Date/Time: date-fns
+Icons: Lucide React
+Notifications: React Hot Toast
+Backend
+Runtime: Node.js 18+
+Framework: Express.js with TypeScript
+Database: SQLite (development) / PostgreSQL (production)
+ORM: Prisma
+Authentication: JWT tokens with bcrypt
+File Processing: xlsx (SheetJS) for Excel, papaparse for CSV
+Validation: Zod
+API Documentation: OpenAPI/Swagger
+Development Tools
+
+Build Tool: Vite
+Linting: ESLint + Prettier
+Testing: Vitest + React Testing Library
+Package Manager: npm
+Project Structure
+
+route-selection-system/
+├── frontend/
+│ ├── src/
+│ │ ├── components/
+│ │ │ ├── admin/
+│ │ │ │ ├── Dashboard.tsx
+│ │ │ │ ├── RouteManagement.tsx
+│ │ │ │ ├── EmployeeManagement.tsx
+│ │ │ │ ├── SelectionPeriodConfig.tsx
+│ │ │ │ ├── AssignmentProcessor.tsx
+│ │ │ │ └── Reports.tsx
+│ │ │ ├── driver/
+│ │ │ │ ├── DriverDashboard.tsx
+│ │ │ │ ├── RouteBrowser.tsx
+│ │ │ │ ├── RouteDetails.tsx
+│ │ │ │ ├── SelectionSubmission.tsx
+│ │ │ │ └── ConfirmationScreen.tsx
+│ │ │ ├── shared/
+│ │ │ │ ├── Layout.tsx
+│ │ │ │ ├── Navbar.tsx
+│ │ │ │ ├── Modal.tsx
+│ │ │ │ ├── Table.tsx
+│ │ │ │ ├── FileUpload.tsx
+│ │ │ │ └── Loading.tsx
+│ │ │ └── auth/
+│ │ │ ├── Login.tsx
+│ │ │ └── ProtectedRoute.tsx
+│ │ ├── contexts/
+│ │ │ ├── AuthContext.tsx
+│ │ │ └── AppContext.tsx
+│ │ ├── hooks/
+│ │ │ ├── useAuth.ts
+│ │ │ ├── useRoutes.ts
+│ │ │ ├── useEmployees.ts
+│ │ │ └── useSelections.ts
+│ │ ├── services/
+│ │ │ └── api.ts
+│ │ ├── types/
+│ │ │ └── index.ts
+│ │ ├── utils/
+│ │ │ ├── validation.ts
+│ │ │ ├── formatting.ts
+│ │ │ └── sorting.ts
+│ │ ├── App.tsx
+│ │ └── main.tsx
+│ ├── public/
+│ ├── package.json
+│ ├── tsconfig.json
+│ ├── vite.config.ts
+│ └── tailwind.config.js
+│
+├── backend/
+│ ├── src/
+│ │ ├── controllers/
+│ │ │ ├── authController.ts
+│ │ │ ├── routeController.ts
+│ │ │ ├── employeeController.ts
+│ │ │ ├── selectionController.ts
+│ │ │ └── assignmentController.ts
+│ │ ├── middleware/
+│ │ │ ├── auth.ts
+│ │ │ ├── errorHandler.ts
+│ │ │ └── validation.ts
+│ │ ├── routes/
+│ │ │ ├── authRoutes.ts
+│ │ │ ├── routeRoutes.ts
+│ │ │ ├── employeeRoutes.ts
+│ │ │ ├── selectionRoutes.ts
+│ │ │ └── assignmentRoutes.ts
+│ │ ├── services/
+│ │ │ ├── assignmentEngine.ts
+│ │ │ ├── fileProcessor.ts
+│ │ │ ├── emailService.ts
+│ │ │ └── reportGenerator.ts
+│ │ ├── utils/
+│ │ │ ├── database.ts
+│ │ │ ├── validators.ts
+│ │ │ └── helpers.ts
+│ │ ├── types/
+│ │ │ └── index.ts
+│ │ └── server.ts
+│ ├── prisma/
+│ │ ├── schema.prisma
+│ │ └── seed.ts
+│ ├── package.json
+│ └── tsconfig.json
+│
+├── README.md
+└── .gitignore
+
+Database Schema (Prisma)
+
+// prisma/schema.prisma
+generator client {
+provider = "prisma-client-js"
+}
+datasource db {
+provider = "postgresql" // or "sqlite" for development
+url = env("DATABASE_URL")
+}
+model User {
+id String @id @default(uuid())
+email String @unique
+password String
+role Role @default(DRIVER)
+employeeId String? @unique
+employee Employee? @relation(fields: [employeeId], references: [id])
+createdAt DateTime @default(now())
+updatedAt DateTime @updatedAt
+}
+enum Role {
+ADMIN
+DRIVER
+}
+model Employee {
+id String @id @default(uuid())
+employeeNumber String @unique
+firstName String
+lastName String
+email String @unique
+phone String?
+hireDate DateTime
+cdlNumber String
+hasDoublesEndorsement Boolean @default(false)
+hasChainExperience Boolean @default(false)
+currentRouteId String?
+currentRoute Route? @relation("CurrentRoute", fields: [currentRouteId], references: [id])
+isActive Boolean @default(true)
+isEligible Boolean @default(true)
+ineligibilityReason String?
+ineligibilityDate DateTime?
+user User?
+selections Selection[]
+assignments Assignment[]
+disqualifications Disqualification[]
+createdAt DateTime @default(now())
+updatedAt DateTime @updatedAt
+}
+model Route {
+id String @id @default(uuid())
+runNumber Int @unique
+runType RunType
+origin String
+destination String
+days String
+startTime String
+endTime String
+dispatchGoal String?
+arrivalGoal String?
+distance Int
+rateType RateType
+workTime Float
+requiresDoublesEndorsement Boolean @default(false)
+requiresChainExperience Boolean @default(false)
+isActive Boolean @default(true)
+currentEmployees Employee[] @relation("CurrentRoute")
+selections Selection[]
+assignments Assignment[]
+createdAt DateTime @default(now())
+updatedAt DateTime @updatedAt
+}
+enum RunType {
+DOUBLES
+SINGLES
+}
+enum RateType {
+MILES
+FLAT_RATE
+}
+model SelectionPeriod {
+id String @id @default(uuid())
+name String
+openingDate DateTime
+closingDate DateTime
+notificationDate DateTime
+status PeriodStatus @default(DRAFT)
+isActive Boolean @default(false)
+selections Selection[]
+assignments Assignment[]
+createdAt DateTime @default(now())
+updatedAt DateTime @updatedAt
+}
+enum PeriodStatus {
+DRAFT
+OPEN
+CLOSED
+PROCESSED
+}
+model Selection {
+id String @id @default(uuid())
+employeeId String
+employee Employee @relation(fields: [employeeId], references: [id])
+selectionPeriodId String
+selectionPeriod SelectionPeriod @relation(fields: [selectionPeriodId], references: [id])
+firstChoiceId String?
+firstChoice Route? @relation(fields: [firstChoiceId], references: [id])
+secondChoiceId String?
+thirdChoiceId String?
+submittedAt DateTime?
+confirmationNumber String? @unique
+createdAt DateTime @default(now())
+updatedAt DateTime @updatedAt
+@@unique([employeeId, selectionPeriodId])
+}
+model Assignment {
+id String @id @default(uuid())
+employeeId String
+employee Employee @relation(fields: [employeeId], references: [id])
+routeId String?
+route Route? @relation(fields: [routeId], references: [id])
+selectionPeriodId String
+selectionPeriod SelectionPeriod @relation(fields: [selectionPeriodId], references: [id])
+choiceReceived Int? // 1, 2, 3, or null for float pool
+assignedAt DateTime @default(now())
+effectiveDate DateTime
+createdAt DateTime @default(now())
+updatedAt DateTime @updatedAt
+@@unique([employeeId, selectionPeriodId])
+}
+model Disqualification {
+id String @id @default(uuid())
+employeeId String
+employee Employee @relation(fields: [employeeId], references: [id])
+reason String
+description String?
+date DateTime @default(now())
+resolvedAt DateTime?
+createdAt DateTime @default(now())
+updatedAt DateTime @updatedAt
+}
+model AuditLog {
+id String @id @default(uuid())
+userId String
+action String
+entity String
+entityId String?
+changes String? // JSON string
+ipAddress String?
+createdAt DateTime @default(now())
+}
+API Endpoints
+Authentication
+POST /api/auth/login
+POST /api/auth/logout
+GET /api/auth/me
+POST /api/auth/refresh
+Routes
+
+GET /api/routes # List all routes
+GET /api/routes/:id # Get route details
+POST /api/routes # Create route (admin)
+PUT /api/routes/:id # Update route (admin)
+DELETE /api/routes/:id # Delete route (admin)
+POST /api/routes/import # Import routes from Excel/CSV (admin)
+GET /api/routes/export # Export routes to Excel
+GET /api/routes/available # Get available routes for current period
+Employees
+GET /api/employees # List all employees (admin)
+GET /api/employees/:id # Get employee details
+POST /api/employees # Create employee (admin)
+PUT /api/employees/:id # Update employee (admin)
+DELETE /api/employees/:id # Delete employee (admin)
+POST /api/employees/import # Import employees from Excel/CSV (admin)
+GET /api/employees/export # Export employees to Excel (admin)
+PUT /api/employees/:id/eligibility # Update eligibility status (admin)
+GET /api/employees/:id/seniority # Get seniority ranking
+Selection Periods
+GET /api/periods # List all periods (admin)
+GET /api/periods/:id # Get period details
+POST /api/periods # Create period (admin)
+PUT /api/periods/:id # Update period (admin)
+DELETE /api/periods/:id # Delete period (admin)
+GET /api/periods/active # Get current active period
+PUT /api/periods/:id/status # Update period status (admin)
+Selections
+GET /api/selections # List all selections for period (admin)
+GET /api/selections/my # Get my selections (driver)
+POST /api/selections # Submit/update selections (driver)
+DELETE /api/selections/:id # Delete selection (before deadline)
+GET /api/selections/stats # Get selection statistics (admin)
+Assignments
+
+POST /api/assignments/process # Run assignment algorithm (admin)
+GET /api/assignments # Get all assignments for period (admin)
+GET /api/assignments/my # Get my assignment (driver)
+GET /api/assignments/preview # Preview assignments before finalizing (admin)
+PUT /api/assignments/finalize # Finalize and notify assignments (admin)
+GET /api/assignments/export # Export assignments to Excel (admin)
+Reports
+GET /api/reports/selection-summary
+GET /api/reports/assignment-distribution
+GET /api/reports/eligibility
+GET /api/reports/seniority-list
+Disqualifications
+GET /api/disqualifications # List disqualifications (admin)
+POST /api/disqualifications # Create disqualification (admin)
+PUT /api/disqualifications/:id/resolve # Resolve disqualification (admin)
+
+Core Algorithm: Assignment Engine
+
+// backend/src/services/assignmentEngine.ts
+interface Employee {
+id: string;
+firstName: string;
+lastName: string;
+hireDate: Date;
+hasDoublesEndorsement: boolean;
+hasChainExperience: boolean;
+isEligible: boolean;
+}
+interface Route {
+id: string;
+runNumber: number;
+runType: 'DOUBLES' | 'SINGLES';
+requiresDoublesEndorsement: boolean;
+requiresChainExperience: boolean;
+}
+interface Selection {
+employeeId: string;
+firstChoiceId: string | null;
+secondChoiceId: string | null;
+thirdChoiceId: string | null;
+}
+interface Assignment {
+employeeId: string;
+routeId: string | null; // null = float pool
+choiceReceived: number | null; // 1, 2, 3, or null
+}
+export class AssignmentEngine {
+async processAssignments(
+employees: Employee[],
+routes: Route[],
+selections: Selection[]
+): Promise<Assignment[]> {
+// Step 1: Filter and sort employees by seniority
+const eligibleEmployees = employees
+.filter(emp => emp.isEligible)
+.sort((a, b) => {
+// Sort by hire date (earliest = most senior)
+const dateCompare = a.hireDate.getTime() - b.hireDate.getTime();
+if (dateCompare !== 0) return dateCompare;
+// Tie-breaker: last name alphabetically
+return a.lastName.localeCompare(b.lastName);
+});
+
+// Step 2: Create a pool of available routes
+const availableRoutes = new Map(routes.map(r => [r.id, r]));
+
+// Step 3: Process each employee by seniority
+const assignments: Assignment[] = [];
+for (const employee of eligibleEmployees) {
+const selection = selections.find(s => s.employeeId === employee.id);
+if (!selection) {
+// No selection submitted - assign to float pool
+assignments.push({
+employeeId: employee.id,
+routeId: null,
+choiceReceived: null
+});
+continue;
+}
+
+// Try to assign in preference order
+const preferences = [
+{ routeId: selection.firstChoiceId, choice: 1},
+{ routeId: selection.secondChoiceId, choice: 2},
+{ routeId: selection.thirdChoiceId, choice: 3}
+].filter(p => p.routeId !== null);
+
+let assigned = false;
+for (const pref of preferences) {
+const route = availableRoutes.get(pref.routeId!);
+if (!route) {
+// Route already assigned to someone else
+continue;
+}
+
+// Check qualifications
+if (route.requiresDoublesEndorsement && !employee.hasDoublesEndorsement) {
+continue;
+}
+if (route.requiresChainExperience && !employee.hasChainExperience) {
+continue;
+}
+
+// Award the route
+assignments.push({
+employeeId: employee.id,
+routeId: route.id,
+choiceReceived: pref.choice
+});
+availableRoutes.delete(route.id);
+assigned = true;
+break;
+}
+
+if (!assigned) {
+// No preferences available or qualified - float pool
+assignments.push({
+employeeId: employee.id,
+routeId: null,
+choiceReceived: null
+});
+}
+}
+
+return assignments;
+}
+
+async validateAssignments(assignments: Assignment[]): Promise<{
+valid: boolean;
+errors: string[];
+}> {
+const errors: string[] = [];
+const assignedRoutes = new Set<string>();
+
+for (const assignment of assignments) {
+if (assignment.routeId) {
+if (assignedRoutes.has(assignment.routeId)) {
+errors.push(`Route ${assignment.routeId} assigned to multiple employees`);
+}
+assignedRoutes.add(assignment.routeId);
+}
+}
+
+return {
+valid: errors.length === 0,
+errors
+};
+}
+}
+
+File Processing: Excel/CSV Import
+
+// backend/src/services/fileProcessor.ts
+import * as XLSX from 'xlsx';
+import Papa from 'papaparse';
+
+interface RouteImportRow {
+'Run Number': number;
+'Run Type': string;
+'Orig': string;
+'Dest': string;
+'Days': string;
+'Start': string;
+'End': string;
+'Distance': number;
+'Rate Type': string;
+'Work Time': number;
+}
+
+interface EmployeeImportRow {
+'Employee ID': string;
+'First Name': string;
+'Last Name': string;
+'Hire Date': string;
+'CDL Number': string;
+'Email': string;
+'Phone': string;
+'Has Doubles Endorsement'?: string;
+'Has Chain Experience'?: string;
+}
+
+export class FileProcessor {
+async processRouteFile(buffer: Buffer, filename: string): Promise<any[]> {
+const ext = filename.split('.').pop()?.toLowerCase();
+if (ext === 'csv') {
+return this.processRouteCSV(buffer);
+} else if (ext === 'xlsx' || ext === 'xls') {
+return this.processRouteExcel(buffer);
+}
+throw new Error('Unsupported file format. Please use CSV or Excel.');
+}
+
+private async processRouteExcel(buffer: Buffer): Promise<any[]> {
+const workbook = XLSX.read(buffer, { type: 'buffer' });
+const sheetName = workbook.SheetNames[0];
+const sheet = workbook.Sheets[sheetName];
+const data = XLSX.utils.sheet_to_json<RouteImportRow>(sheet);
+return data.map(row => this.mapRouteRow(row));
+}
+
+private async processRouteCSV(buffer: Buffer): Promise<any[]> {
+const text = buffer.toString('utf-8');
+return new Promise((resolve, reject) => {
+Papa.parse<RouteImportRow>(text, {
+header: true,
+dynamicTyping: true,
+skipEmptyLines: true,
+complete: (results) => {
+const mapped = results.data.map(row => this.mapRouteRow(row));
+resolve(mapped);
+},
+error: (error) => {
+reject(error);
+}
+});
+});
+}
+
+private mapRouteRow(row: RouteImportRow): any {
+return {
+runNumber: row['Run Number'],
+runType: row['Run Type'].toUpperCase() as 'DOUBLES' | 'SINGLES',
+origin: row['Orig'],
+destination: row['Dest'],
+days: row['Days'],
+startTime: row['Start'],
+endTime: row['End'],
+distance: row['Distance'],
+rateType: row['Rate Type'].toUpperCase().replace(' ', '_') as 'MILES' | 'FLAT_RATE',
+workTime: row['Work Time'],
+requiresDoublesEndorsement: row['Run Type'].toUpperCase() === 'DOUBLES',
+requiresChainExperience: false,
+isActive: true
+};
+}
+
+async processEmployeeFile(buffer: Buffer, filename: string): Promise<any[]> {
+const ext = filename.split('.').pop()?.toLowerCase();
+if (ext === 'csv') {
+return this.processEmployeeCSV(buffer);
+} else if (ext === 'xlsx' || ext === 'xls') {
+return this.processEmployeeExcel(buffer);
+}
+throw new Error('Unsupported file format. Please use CSV or Excel.');
+}
+
+private async processEmployeeExcel(buffer: Buffer): Promise<any[]> {
+const workbook = XLSX.read(buffer, { type: 'buffer' });
+const sheetName = workbook.SheetNames[0];
+const sheet = workbook.Sheets[sheetName];
+const data = XLSX.utils.sheet_to_json<EmployeeImportRow>(sheet);
+return data.map(row => this.mapEmployeeRow(row));
+}
+
+private async processEmployeeCSV(buffer: Buffer): Promise<any[]> {
+const text = buffer.toString('utf-8');
+return new Promise((resolve, reject) => {
+Papa.parse<EmployeeImportRow>(text, {
+header: true,
+skipEmptyLines: true,
+complete: (results) => {
+const mapped = results.data.map(row => this.mapEmployeeRow(row));
+resolve(mapped);
+},
+error: (error) => {
+reject(error);
+}
+});
+});
+}
+
+private mapEmployeeRow(row: EmployeeImportRow): any {
+const parseBoolean = (val?: string): boolean => {
+if (!val) return false;
+return val.toLowerCase() === 'true' || val === '1' || val.toLowerCase() === 'yes';
+};
+return {
+employeeNumber: row['Employee ID'].toString(),
+firstName: row['First Name'],
+lastName: row['Last Name'],
+email: row['Email'],
+phone: row['Phone'] || null,
+hireDate: new Date(row['Hire Date']),
+cdlNumber: row['CDL Number'],
+hasDoublesEndorsement: parseBoolean(row['Has Doubles Endorsement']),
+hasChainExperience: parseBoolean(row['Has Chain Experience']),
+isActive: true,
+isEligible: true
+};
+}
+
+validateRouteData(routes: any[]): { valid: boolean; errors: string[] } {
+const errors: string[] = [];
+const runNumbers = new Set<number>();
+
+routes.forEach((route, index) => {
+if (!route.runNumber) {
+errors.push(`Row ${index + 1}: Missing Run Number`);
+} else if (runNumbers.has(route.runNumber)) {
+errors.push(`Row ${index + 1}: Duplicate Run Number ${route.runNumber}`);
+} else {
+runNumbers.add(route.runNumber);
+}
+
+if (!route.origin || route.origin.length !== 3) {
+errors.push(`Row ${index + 1}: Invalid Origin code`);
+}
+
+if (!route.destination || route.destination.length !== 3) {
+errors.push(`Row ${index + 1}: Invalid Destination code`);
+}
+
+if (!route.distance || route.distance <= 0) {
+errors.push(`Row ${index + 1}: Invalid Distance`);
+}
+});
+
+return { valid: errors.length === 0, errors };
+}
+
+validateEmployeeData(employees: any[]): { valid: boolean; errors: string[] } {
+const errors: string[] = [];
+const employeeNumbers = new Set<string>();
+const emails = new Set<string>();
+
+employees.forEach((emp, index) => {
+if (!emp.employeeNumber) {
+errors.push(`Row ${index + 1}: Missing Employee ID`);
+} else if (employeeNumbers.has(emp.employeeNumber)) {
+errors.push(`Row ${index + 1}: Duplicate Employee ID ${emp.employeeNumber}`);
+} else {
+employeeNumbers.add(emp.employeeNumber);
+}
+
+if (!emp.email) {
+errors.push(`Row ${index + 1}: Missing Email`);
+} else if (emails.has(emp.email)) {
+errors.push(`Row ${index + 1}: Duplicate Email ${emp.email}`);
+} else {
+emails.add(emp.email);
+}
+
+if (!emp.hireDate || isNaN(emp.hireDate.getTime())) {
+errors.push(`Row ${index + 1}: Invalid Hire Date`);
+}
+});
+
+return { valid: errors.length === 0, errors };
+}
+}
