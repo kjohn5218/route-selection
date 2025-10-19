@@ -7,6 +7,7 @@ config();
 
 // Import routes
 import authRoutes from './routes/auth.js';
+import dashboardRoutes from './routes/dashboard.js';
 import routeRoutes from './routes/routes.js';
 import employeeRoutes from './routes/employees.js';
 import selectionRoutes from './routes/selections.js';
@@ -41,6 +42,7 @@ app.get('/health', (req, res) => {
 
 // API Routes
 app.use('/api/auth', authRoutes);
+app.use('/api/dashboard', dashboardRoutes);
 app.use('/api/routes', routeRoutes);
 app.use('/api/employees', employeeRoutes);
 app.use('/api/selections', selectionRoutes);

@@ -53,9 +53,9 @@ router.post('/login', async (req: Request, res: Response) => {
       user: {
         id: user.id,
         email: user.email,
-        role: user.role,
+        name: user.employee ? `${user.employee.firstName} ${user.employee.lastName}` : user.email,
+        role: user.role === 'ADMIN' ? 'Admin' : user.role === 'DRIVER' ? 'Driver' : 'Manager',
         employeeId: user.employee?.id,
-        employee: user.employee,
       },
     });
   } catch (error) {
@@ -159,9 +159,9 @@ router.get('/me', authenticateToken, async (req: Request, res: Response) => {
     res.json({
       id: user.id,
       email: user.email,
-      role: user.role,
+      name: user.employee ? `${user.employee.firstName} ${user.employee.lastName}` : user.email,
+      role: user.role === 'ADMIN' ? 'Admin' : user.role === 'DRIVER' ? 'Driver' : 'Manager',
       employeeId: user.employee?.id,
-      employee: user.employee,
     });
   } catch (error) {
     console.error('Get user error:', error);

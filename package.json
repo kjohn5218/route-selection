@@ -6,6 +6,8 @@
   "type": "module",
   "scripts": {
     "dev": "tsx watch src/server.ts",
+    "dev:frontend": "cd frontend && npm run dev",
+    "dev:all": "npm run dev & npm run dev:frontend",
     "build": "tsc",
     "start": "node dist/server.js",
     "db:generate": "prisma generate",
