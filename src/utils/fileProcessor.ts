@@ -92,11 +92,17 @@ export class FileProcessor {
 
     rawData.forEach((row, index) => {
       try {
+        // Debug log to see what we're getting
+        if (index === 0) {
+          console.log('First row data:', row);
+          console.log('Distance value:', row.distance, 'Type:', typeof row.distance);
+        }
+
         // Convert string values to appropriate types
         const processedRow = {
           ...row,
-          distance: this.parseNumber(row.distance, `Row ${index + 1}: distance`),
-          workTime: this.parseNumber(row.workTime, `Row ${index + 1}: workTime`),
+          distance: row.distance !== undefined && row.distance !== '' ? this.parseNumber(row.distance, `Row ${index + 1}: distance`) : 0,
+          workTime: row.workTime !== undefined && row.workTime !== '' ? this.parseNumber(row.workTime, `Row ${index + 1}: workTime`) : 0,
           requiresDoublesEndorsement: this.parseBoolean(row.requiresDoublesEndorsement),
           requiresChainExperience: this.parseBoolean(row.requiresChainExperience),
           isActive: row.isActive !== undefined ? this.parseBoolean(row.isActive) : true,
@@ -325,17 +331,25 @@ export class FileProcessor {
   }
 
   private static parseNumber(value: any, context: string): number {
+    console.log(`Parsing number for ${context}:`, value, 'Type:', typeof value);
+    
+    if (value === null || value === undefined || value === '') {
+      throw new Error(`${context}: Empty or missing value`);
+    }
+    
     if (typeof value === 'number') return value;
+    
     if (typeof value === 'string') {
-      // Remove commas from numbers (e.g., "1,234" -> "1234")
-      const cleanValue = value.replace(/,/g, '');
+      // Remove commas and spaces from numbers (e.g., "1,234" -> "1234")
+      const cleanValue = value.trim().replace(/,/g, '');
       const parsed = parseFloat(cleanValue);
       if (isNaN(parsed)) {
-        throw new Error(`${context}: Invalid number format`);
+        throw new Error(`${context}: Invalid number format '${value}'`);
       }
       return parsed;
     }
-    throw new Error(`${context}: Expected number`);
+    
+    throw new Error(`${context}: Expected number but got ${typeof value}`);
   }
 
   private static parseBoolean(value: any): boolean {
