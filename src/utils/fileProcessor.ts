@@ -103,6 +103,12 @@ export class FileProcessor {
         };
 
         const validatedRow = routeImportSchema.parse(processedRow);
+        
+        // Automatically set requiresDoublesEndorsement for Doubles routes
+        if (validatedRow.type === 'DOUBLES') {
+          validatedRow.requiresDoublesEndorsement = true;
+        }
+        
         validData.push(validatedRow);
       } catch (error) {
         if (error instanceof z.ZodError) {
@@ -321,7 +327,9 @@ export class FileProcessor {
   private static parseNumber(value: any, context: string): number {
     if (typeof value === 'number') return value;
     if (typeof value === 'string') {
-      const parsed = parseFloat(value);
+      // Remove commas from numbers (e.g., "1,234" -> "1234")
+      const cleanValue = value.replace(/,/g, '');
+      const parsed = parseFloat(cleanValue);
       if (isNaN(parsed)) {
         throw new Error(`${context}: Invalid number format`);
       }
