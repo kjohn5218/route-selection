@@ -35,7 +35,15 @@ const employeeImportSchema = z.object({
   lastName: z.string(),
   email: z.string().email(),
   phone: z.string().optional(),
-  hireDate: z.string().transform(str => new Date(str)),
+  hireDate: z.string().transform(str => {
+    // Handle MM/DD/YYYY format
+    if (str.includes('/')) {
+      const [month, day, year] = str.split('/');
+      return new Date(`${year}-${month.padStart(2, '0')}-${day.padStart(2, '0')}`);
+    }
+    // Handle standard formats
+    return new Date(str);
+  }),
   doublesEndorsement: z.boolean().default(false),
   chainExperience: z.boolean().default(false),
   isEligible: z.boolean().default(true),
@@ -263,13 +271,46 @@ export class FileProcessor {
     const template = [
       {
         employeeId: 'EMP001',
-        firstName: 'John',
-        lastName: 'Smith',
-        email: 'john.smith@company.com',
-        phone: '206-555-0123',
-        hireDate: '2020-01-15',
+        firstName: 'Clement',
+        lastName: 'Arlee Mingle',
+        email: 'aryeemingle@gmail.com',
+        phone: '334-590-5191',
+        hireDate: '03/24/2025',
         doublesEndorsement: true,
+        chainExperience: true,
+        isEligible: true,
+      },
+      {
+        employeeId: 'EMP002',
+        firstName: 'Lynn C.',
+        lastName: 'Beale',
+        email: 'truckerbeale2968@gmail.com',
+        phone: '303-520-1507',
+        hireDate: '07/23/2012',
+        doublesEndorsement: true,
+        chainExperience: true,
+        isEligible: true,
+      },
+      {
+        employeeId: 'EMP003',
+        firstName: 'Eduardo D.',
+        lastName: 'Flores',
+        email: 'e_d97@hotmail.com',
+        phone: '720-308-3850',
+        hireDate: '08/09/2022',
+        doublesEndorsement: false,
         chainExperience: false,
+        isEligible: true,
+      },
+      {
+        employeeId: 'EMP004',
+        firstName: 'Randy J.',
+        lastName: 'Foss',
+        email: 'rjfoss030362@msn.com',
+        phone: '303-915-8716',
+        hireDate: '11/14/2005',
+        doublesEndorsement: true,
+        chainExperience: true,
         isEligible: true,
       },
     ];
