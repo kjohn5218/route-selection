@@ -170,6 +170,20 @@ router.post('/', authenticateToken, requireAdmin, async (req: Request, res: Resp
       return res.status(409).json({ error: 'Route with this run number already exists' });
     }
 
+    // Normalize route types from import
+    if (data.type === 'Doubles') {
+      data.type = 'DOUBLES';
+    } else if (data.type === 'Singles') {
+      data.type = 'LOCAL';
+    }
+
+    // Normalize rate types from import
+    if (data.rateType === 'Miles') {
+      data.rateType = 'MILEAGE';
+    } else if (data.rateType === 'Flat Rate') {
+      data.rateType = 'SALARY';
+    }
+
     // Automatically set requiresDoublesEndorsement for doubles routes
     if (data.type === 'doubles' || data.type === 'DOUBLES') {
       data.requiresDoublesEndorsement = true;
@@ -212,6 +226,20 @@ router.put('/:id', authenticateToken, requireAdmin, async (req: Request, res: Re
       if (conflictingRoute) {
         return res.status(409).json({ error: 'Route with this run number already exists' });
       }
+    }
+
+    // Normalize route types from import
+    if (data.type === 'Doubles') {
+      data.type = 'DOUBLES';
+    } else if (data.type === 'Singles') {
+      data.type = 'LOCAL';
+    }
+
+    // Normalize rate types from import
+    if (data.rateType === 'Miles') {
+      data.rateType = 'MILEAGE';
+    } else if (data.rateType === 'Flat Rate') {
+      data.rateType = 'SALARY';
     }
 
     // Automatically set requiresDoublesEndorsement for doubles routes

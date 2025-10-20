@@ -5,14 +5,24 @@ import { z } from 'zod';
 // Define schemas for import validation
 const routeImportSchema = z.object({
   runNumber: z.string(),
-  type: z.enum(['LOCAL', 'REGIONAL', 'LONG_HAUL', 'DEDICATED', 'DOUBLES']),
+  type: z.enum(['LOCAL', 'REGIONAL', 'LONG_HAUL', 'DEDICATED', 'DOUBLES', 'Doubles', 'Singles']).transform(val => {
+    // Normalize the type values
+    if (val === 'Doubles') return 'DOUBLES';
+    if (val === 'Singles') return 'LOCAL';
+    return val;
+  }),
   origin: z.string(),
   destination: z.string(),
   days: z.string(),
   startTime: z.string(),
   endTime: z.string(),
   distance: z.number(),
-  rateType: z.enum(['HOURLY', 'MILEAGE', 'SALARY']),
+  rateType: z.enum(['HOURLY', 'MILEAGE', 'SALARY', 'Miles', 'Flat Rate']).transform(val => {
+    // Normalize the rate type values
+    if (val === 'Miles') return 'MILEAGE';
+    if (val === 'Flat Rate') return 'SALARY';
+    return val;
+  }),
   workTime: z.number(),
   requiresDoublesEndorsement: z.boolean().default(false),
   requiresChainExperience: z.boolean().default(false),
@@ -185,16 +195,61 @@ export class FileProcessor {
   static generateRouteTemplate(): Buffer {
     const template = [
       {
-        runNumber: 'R001',
-        type: 'LOCAL',
-        origin: 'Seattle Terminal',
-        destination: 'Tacoma Warehouse',
-        days: 'Mon-Fri',
-        startTime: '06:00',
-        endTime: '14:00',
-        distance: 45.5,
-        rateType: 'HOURLY',
-        workTime: 8.0,
+        runNumber: '1',
+        type: 'Doubles',
+        origin: 'DEN',
+        destination: 'WAM',
+        days: 'M,T,W,TH,F',
+        startTime: '1:45 PM',
+        endTime: '12:45 AM',
+        distance: 562,
+        rateType: 'Miles',
+        workTime: 11.25,
+        requiresDoublesEndorsement: true,
+        requiresChainExperience: false,
+        isActive: true,
+      },
+      {
+        runNumber: '2',
+        type: 'Doubles',
+        origin: 'DEN',
+        destination: 'WAM',
+        days: 'M,T,W,TH,F',
+        startTime: '9:15 PM',
+        endTime: '8:30 AM',
+        distance: 562,
+        rateType: 'Miles',
+        workTime: 11.25,
+        requiresDoublesEndorsement: true,
+        requiresChainExperience: false,
+        isActive: true,
+      },
+      {
+        runNumber: '8',
+        type: 'Singles',
+        origin: 'DEN',
+        destination: 'WAK',
+        days: 'M,T,W,TH,F',
+        startTime: '7:15 PM',
+        endTime: '6:30 AM',
+        distance: 616,
+        rateType: 'Miles',
+        workTime: 11.25,
+        requiresDoublesEndorsement: false,
+        requiresChainExperience: false,
+        isActive: true,
+      },
+      {
+        runNumber: '16',
+        type: 'Singles',
+        origin: 'DEN',
+        destination: 'NCS',
+        days: 'M,T,W,TH,F',
+        startTime: '11:15 PM',
+        endTime: '8:15 AM',
+        distance: 350,
+        rateType: 'Flat Rate',
+        workTime: 9.0,
         requiresDoublesEndorsement: false,
         requiresChainExperience: false,
         isActive: true,
