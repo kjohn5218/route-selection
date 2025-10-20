@@ -66,10 +66,19 @@ export interface ImportResult<T> {
 
 export class FileProcessor {
   static parseExcel(buffer: Buffer): any[] {
-    const workbook = XLSX.read(buffer, { type: 'buffer' });
+    const workbook = XLSX.read(buffer, { 
+      type: 'buffer',
+      raw: false, // Don't use raw values
+      dateNF: 'mm/dd/yyyy', // Date format
+    });
     const sheetName = workbook.SheetNames[0];
     const worksheet = workbook.Sheets[sheetName];
-    return XLSX.utils.sheet_to_json(worksheet);
+    
+    // Convert sheet to JSON with string values
+    return XLSX.utils.sheet_to_json(worksheet, {
+      raw: false, // Format values as strings
+      dateNF: 'mm/dd/yyyy',
+    });
   }
 
   static parseCSV(content: string): any[] {
@@ -193,20 +202,20 @@ export class FileProcessor {
 
         // Convert string values to appropriate types
         const processedRow = {
-          runNumber: normalizedRow.runNumber || '',
-          type: normalizedRow.type || '',
-          origin: normalizedRow.origin || '',
-          destination: normalizedRow.destination || '',
-          days: normalizedRow.days || '',
-          startTime: normalizedRow.startTime || '',
-          endTime: normalizedRow.endTime || '',
+          runNumber: String(normalizedRow.runNumber || ''),
+          type: String(normalizedRow.type || ''),
+          origin: String(normalizedRow.origin || ''),
+          destination: String(normalizedRow.destination || ''),
+          days: String(normalizedRow.days || ''),
+          startTime: String(normalizedRow.startTime || ''),
+          endTime: String(normalizedRow.endTime || ''),
           distance: normalizedRow.distance !== undefined && normalizedRow.distance !== '' 
             ? this.parseNumber(normalizedRow.distance, `Row ${index + 1}: distance`) 
             : 0,
           workTime: normalizedRow.workTime !== undefined && normalizedRow.workTime !== '' 
             ? this.parseNumber(normalizedRow.workTime, `Row ${index + 1}: workTime`) 
             : 8, // Default to 8 hours
-          rateType: normalizedRow.rateType || 'HOURLY',
+          rateType: String(normalizedRow.rateType || 'HOURLY'),
           requiresDoublesEndorsement: normalizedRow.requiresDoublesEndorsement !== undefined 
             ? this.parseBoolean(normalizedRow.requiresDoublesEndorsement) 
             : false,
