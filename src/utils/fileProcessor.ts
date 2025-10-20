@@ -90,22 +90,132 @@ export class FileProcessor {
     const errors: Array<{ row: number; field?: string; message: string }> = [];
     const validData: any[] = [];
 
+    // If no data, return early
+    if (!rawData || rawData.length === 0) {
+      errors.push({
+        row: 0,
+        message: 'No data found in file',
+      });
+      return {
+        success: false,
+        data: validData,
+        errors,
+        summary: {
+          totalRows: 0,
+          validRows: 0,
+          errorRows: 1,
+        },
+      };
+    }
+
+    // Log headers to debug
+    console.log('CSV Headers:', Object.keys(rawData[0]));
+    console.log('First row raw data:', rawData[0]);
+
     rawData.forEach((row, index) => {
       try {
-        // Debug log to see what we're getting
-        if (index === 0) {
-          console.log('First row data:', row);
-          console.log('Distance value:', row.distance, 'Type:', typeof row.distance);
-        }
+        // Map common header variations
+        const normalizedRow: any = {};
+        
+        // Map headers (case-insensitive)
+        Object.keys(row).forEach(key => {
+          const lowerKey = key.toLowerCase().trim();
+          const value = row[key];
+          
+          // Map variations to standard field names
+          switch(lowerKey) {
+            case 'run #':
+            case 'run#':
+            case 'runnumber':
+            case 'run_number':
+              normalizedRow.runNumber = value;
+              break;
+            case 'run type':
+            case 'runtype':
+            case 'type':
+              normalizedRow.type = value;
+              break;
+            case 'orig':
+            case 'origin':
+              normalizedRow.origin = value;
+              break;
+            case 'dest':
+            case 'destination':
+              normalizedRow.destination = value;
+              break;
+            case 'days':
+              normalizedRow.days = value;
+              break;
+            case 'start':
+            case 'starttime':
+            case 'start_time':
+              normalizedRow.startTime = value;
+              break;
+            case 'end':
+            case 'endtime':
+            case 'end_time':
+              normalizedRow.endTime = value;
+              break;
+            case 'distance':
+              normalizedRow.distance = value;
+              break;
+            case 'rate type':
+            case 'ratetype':
+            case 'rate_type':
+              normalizedRow.rateType = value;
+              break;
+            case 'estimated work time':
+            case 'worktime':
+            case 'work_time':
+              normalizedRow.workTime = value;
+              break;
+            case 'doubles':
+            case 'doublesendorsement':
+            case 'requiresdoublesendorsement':
+              normalizedRow.requiresDoublesEndorsement = value;
+              break;
+            case 'chains':
+            case 'chainexperience':
+            case 'requireschainexperience':
+              normalizedRow.requiresChainExperience = value;
+              break;
+            case 'active':
+            case 'isactive':
+              normalizedRow.isActive = value;
+              break;
+            default:
+              // Keep any other fields as-is
+              normalizedRow[key] = value;
+          }
+        });
+
+        console.log(`Row ${index + 1} normalized:`, normalizedRow);
 
         // Convert string values to appropriate types
         const processedRow = {
-          ...row,
-          distance: row.distance !== undefined && row.distance !== '' ? this.parseNumber(row.distance, `Row ${index + 1}: distance`) : 0,
-          workTime: row.workTime !== undefined && row.workTime !== '' ? this.parseNumber(row.workTime, `Row ${index + 1}: workTime`) : 0,
-          requiresDoublesEndorsement: this.parseBoolean(row.requiresDoublesEndorsement),
-          requiresChainExperience: this.parseBoolean(row.requiresChainExperience),
-          isActive: row.isActive !== undefined ? this.parseBoolean(row.isActive) : true,
+          runNumber: normalizedRow.runNumber || '',
+          type: normalizedRow.type || '',
+          origin: normalizedRow.origin || '',
+          destination: normalizedRow.destination || '',
+          days: normalizedRow.days || '',
+          startTime: normalizedRow.startTime || '',
+          endTime: normalizedRow.endTime || '',
+          distance: normalizedRow.distance !== undefined && normalizedRow.distance !== '' 
+            ? this.parseNumber(normalizedRow.distance, `Row ${index + 1}: distance`) 
+            : 0,
+          workTime: normalizedRow.workTime !== undefined && normalizedRow.workTime !== '' 
+            ? this.parseNumber(normalizedRow.workTime, `Row ${index + 1}: workTime`) 
+            : 8, // Default to 8 hours
+          rateType: normalizedRow.rateType || 'HOURLY',
+          requiresDoublesEndorsement: normalizedRow.requiresDoublesEndorsement !== undefined 
+            ? this.parseBoolean(normalizedRow.requiresDoublesEndorsement) 
+            : false,
+          requiresChainExperience: normalizedRow.requiresChainExperience !== undefined 
+            ? this.parseBoolean(normalizedRow.requiresChainExperience) 
+            : false,
+          isActive: normalizedRow.isActive !== undefined 
+            ? this.parseBoolean(normalizedRow.isActive) 
+            : true,
         };
 
         const validatedRow = routeImportSchema.parse(processedRow);
@@ -331,8 +441,6 @@ export class FileProcessor {
   }
 
   private static parseNumber(value: any, context: string): number {
-    console.log(`Parsing number for ${context}:`, value, 'Type:', typeof value);
-    
     if (value === null || value === undefined || value === '') {
       throw new Error(`${context}: Empty or missing value`);
     }
