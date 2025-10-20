@@ -8,7 +8,7 @@ const router = Router();
 
 const createRouteSchema = z.object({
   runNumber: z.string(),
-  type: z.enum(['LOCAL', 'REGIONAL', 'LONG_HAUL', 'DEDICATED']),
+  type: z.enum(['LOCAL', 'REGIONAL', 'LONG_HAUL', 'DEDICATED', 'DOUBLES']),
   origin: z.string(),
   destination: z.string(),
   days: z.string(),
@@ -170,6 +170,11 @@ router.post('/', authenticateToken, requireAdmin, async (req: Request, res: Resp
       return res.status(409).json({ error: 'Route with this run number already exists' });
     }
 
+    // Automatically set requiresDoublesEndorsement for doubles routes
+    if (data.type === 'doubles' || data.type === 'DOUBLES') {
+      data.requiresDoublesEndorsement = true;
+    }
+
     const route = await prisma.route.create({
       data,
     });
@@ -207,6 +212,11 @@ router.put('/:id', authenticateToken, requireAdmin, async (req: Request, res: Re
       if (conflictingRoute) {
         return res.status(409).json({ error: 'Route with this run number already exists' });
       }
+    }
+
+    // Automatically set requiresDoublesEndorsement for doubles routes
+    if (data.type === 'doubles' || data.type === 'DOUBLES') {
+      data.requiresDoublesEndorsement = true;
     }
 
     const route = await prisma.route.update({
@@ -284,6 +294,15 @@ router.get('/available/:selectionPeriodId', authenticateToken, async (req: Reque
       return res.status(400).json({ error: 'Selection period is not open' });
     }
 
+    // Get current user's employee profile
+    const employee = req.user?.employeeId ? await prisma.employee.findUnique({
+      where: { id: req.user.employeeId },
+      select: {
+        doublesEndorsement: true,
+        chainExperience: true,
+      }
+    }) : null;
+
     // Get routes that are active and not yet assigned for this period
     const assignedRouteIds = await prisma.assignment.findMany({
       where: { selectionPeriodId },
@@ -294,13 +313,40 @@ router.get('/available/:selectionPeriodId', authenticateToken, async (req: Reque
       .filter(a => a.routeId)
       .map(a => a.routeId as string);
 
-    const availableRoutes = await prisma.route.findMany({
-      where: {
-        isActive: true,
-        id: {
-          notIn: assignedIds,
-        },
+    const whereClause: any = {
+      isActive: true,
+      id: {
+        notIn: assignedIds,
       },
+    };
+
+    // If it's a driver, filter out routes they don't qualify for
+    if (req.user?.role === 'DRIVER' && employee) {
+      whereClause.AND = [];
+      
+      // Filter doubles routes if driver doesn't have endorsement
+      if (!employee.doublesEndorsement) {
+        whereClause.AND.push({
+          OR: [
+            { requiresDoublesEndorsement: false },
+            { requiresDoublesEndorsement: null },
+          ]
+        });
+      }
+      
+      // Filter chain experience routes if driver doesn't have experience
+      if (!employee.chainExperience) {
+        whereClause.AND.push({
+          OR: [
+            { requiresChainExperience: false },
+            { requiresChainExperience: null },
+          ]
+        });
+      }
+    }
+
+    const availableRoutes = await prisma.route.findMany({
+      where: whereClause,
       orderBy: { runNumber: 'asc' },
     });
 

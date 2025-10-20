@@ -1,0 +1,11 @@
+runNumber,type,origin,destination,days,startTime,endTime,distance,rateType,workTime,requiresDoublesEndorsement,requiresChainExperience,isActive
+R001,LOCAL,Seattle Terminal,Tacoma Warehouse,Mon-Fri,06:00,14:00,45.5,HOURLY,8.0,FALSE,FALSE,TRUE
+R002,REGIONAL,Seattle Terminal,Portland Hub,Mon-Wed-Fri,04:00,16:00,173.2,MILEAGE,12.0,FALSE,TRUE,TRUE
+R003,LONG_HAUL,Seattle Terminal,Los Angeles DC,Mon-Thu,22:00,10:00,1135.8,MILEAGE,36.0,TRUE,TRUE,TRUE
+R004,DEDICATED,Boeing Everett,Boeing Renton,Mon-Fri,07:00,17:00,38.7,SALARY,10.0,FALSE,FALSE,TRUE
+R005,LOCAL,Tacoma Warehouse,Olympia Store,Tue-Thu-Sat,08:00,16:00,62.3,HOURLY,8.0,FALSE,FALSE,TRUE
+R006,DOUBLES,Seattle Terminal,Spokane DC,Mon-Wed,03:00,19:00,279.4,MILEAGE,16.0,TRUE,FALSE,TRUE
+R007,REGIONAL,Portland Hub,Eugene Terminal,Tue-Thu,05:00,15:00,108.6,MILEAGE,10.0,FALSE,TRUE,TRUE
+R008,DOUBLES,Seattle Terminal,Vancouver BC,Mon-Fri,04:00,14:00,142.3,MILEAGE,10.0,TRUE,FALSE,TRUE
+R009,LOCAL,Bellevue Store,Redmond Store,Mon-Sat,09:00,17:00,12.8,HOURLY,8.0,FALSE,FALSE,TRUE
+R010,LONG_HAUL,Seattle Terminal,Denver DC,Sun-Wed,20:00,08:00,1316.7,MILEAGE,36.0,FALSE,TRUE,TRUE

@@ -5,7 +5,7 @@ import { z } from 'zod';
 // Define schemas for import validation
 const routeImportSchema = z.object({
   runNumber: z.string(),
-  type: z.enum(['LOCAL', 'REGIONAL', 'LONG_HAUL', 'DEDICATED']),
+  type: z.enum(['LOCAL', 'REGIONAL', 'LONG_HAUL', 'DEDICATED', 'DOUBLES']),
   origin: z.string(),
   destination: z.string(),
   days: z.string(),
