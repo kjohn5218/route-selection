@@ -13,7 +13,8 @@ import {
   Phone,
   Calendar,
   Award,
-  Truck
+  Truck,
+  X
 } from 'lucide-react';
 import apiClient from '../api/client';
 import { useAuth } from '../contexts/AuthContext';
@@ -62,6 +63,31 @@ const Employees = () => {
       queryClient.invalidateQueries({ queryKey: ['employees'] });
       setShowDeleteModal(false);
       setSelectedEmployee(null);
+    },
+  });
+
+  // Update employee mutation
+  const updateEmployeeMutation = useMutation({
+    mutationFn: async ({ id, ...data }: Partial<Employee> & { id: string }) => {
+      const response = await apiClient.put(`/employees/${id}`, data);
+      return response.data;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['employees'] });
+      setShowEditModal(false);
+      setSelectedEmployee(null);
+    },
+  });
+
+  // Create employee mutation
+  const createEmployeeMutation = useMutation({
+    mutationFn: async (data: Omit<Employee, 'id' | 'user'>) => {
+      const response = await apiClient.post('/employees', data);
+      return response.data;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['employees'] });
+      setShowAddModal(false);
     },
   });
 
@@ -351,6 +377,280 @@ const Employees = () => {
                 {deleteEmployeeMutation.isPending ? 'Deleting...' : 'Delete'}
               </button>
             </div>
+          </div>
+        </div>
+      )}
+
+      {/* Edit Employee Modal */}
+      {showEditModal && selectedEmployee && (
+        <div className="fixed inset-0 bg-black/50 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+          <div className="bg-white rounded-xl max-w-2xl w-full p-6 animate-slide-up max-h-[90vh] overflow-y-auto">
+            <div className="flex items-center justify-between mb-6">
+              <h3 className="text-lg font-semibold text-gray-900">Edit Employee</h3>
+              <button
+                onClick={() => setShowEditModal(false)}
+                className="p-2 hover:bg-gray-100 rounded-lg transition-colors"
+              >
+                <X className="w-5 h-5 text-gray-500" />
+              </button>
+            </div>
+            <form
+              onSubmit={(e) => {
+                e.preventDefault();
+                const formData = new FormData(e.currentTarget);
+                updateEmployeeMutation.mutate({
+                  id: selectedEmployee.id,
+                  employeeId: formData.get('employeeId') as string,
+                  firstName: formData.get('firstName') as string,
+                  lastName: formData.get('lastName') as string,
+                  email: formData.get('email') as string,
+                  phone: formData.get('phone') as string || undefined,
+                  hireDate: formData.get('hireDate') as string,
+                  doublesEndorsement: formData.get('doublesEndorsement') === 'on',
+                  chainExperience: formData.get('chainExperience') === 'on',
+                });
+              }}
+              className="space-y-4"
+            >
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div>
+                  <label className="label" htmlFor="employeeId">Employee ID</label>
+                  <input
+                    type="text"
+                    id="employeeId"
+                    name="employeeId"
+                    defaultValue={selectedEmployee.employeeId}
+                    className="input-field"
+                    required
+                  />
+                </div>
+                <div>
+                  <label className="label" htmlFor="email">Email</label>
+                  <input
+                    type="email"
+                    id="email"
+                    name="email"
+                    defaultValue={selectedEmployee.email}
+                    className="input-field"
+                    required
+                  />
+                </div>
+                <div>
+                  <label className="label" htmlFor="firstName">First Name</label>
+                  <input
+                    type="text"
+                    id="firstName"
+                    name="firstName"
+                    defaultValue={selectedEmployee.firstName}
+                    className="input-field"
+                    required
+                  />
+                </div>
+                <div>
+                  <label className="label" htmlFor="lastName">Last Name</label>
+                  <input
+                    type="text"
+                    id="lastName"
+                    name="lastName"
+                    defaultValue={selectedEmployee.lastName}
+                    className="input-field"
+                    required
+                  />
+                </div>
+                <div>
+                  <label className="label" htmlFor="phone">Phone</label>
+                  <input
+                    type="tel"
+                    id="phone"
+                    name="phone"
+                    defaultValue={selectedEmployee.phone}
+                    className="input-field"
+                  />
+                </div>
+                <div>
+                  <label className="label" htmlFor="hireDate">Hire Date</label>
+                  <input
+                    type="date"
+                    id="hireDate"
+                    name="hireDate"
+                    defaultValue={selectedEmployee.hireDate.split('T')[0]}
+                    className="input-field"
+                    required
+                  />
+                </div>
+              </div>
+              <div className="space-y-3">
+                <label className="flex items-center gap-3">
+                  <input
+                    type="checkbox"
+                    name="doublesEndorsement"
+                    defaultChecked={selectedEmployee.doublesEndorsement}
+                    className="w-4 h-4 text-primary-600 border-gray-300 rounded focus:ring-primary-500"
+                  />
+                  <span className="text-sm font-medium text-gray-700">Doubles Endorsement</span>
+                </label>
+                <label className="flex items-center gap-3">
+                  <input
+                    type="checkbox"
+                    name="chainExperience"
+                    defaultChecked={selectedEmployee.chainExperience}
+                    className="w-4 h-4 text-primary-600 border-gray-300 rounded focus:ring-primary-500"
+                  />
+                  <span className="text-sm font-medium text-gray-700">Chain Experience</span>
+                </label>
+              </div>
+              <div className="flex gap-3 justify-end pt-4">
+                <button
+                  type="button"
+                  onClick={() => setShowEditModal(false)}
+                  className="btn-secondary"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  disabled={updateEmployeeMutation.isPending}
+                  className="btn-primary"
+                >
+                  {updateEmployeeMutation.isPending ? 'Saving...' : 'Save Changes'}
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* Add Employee Modal */}
+      {showAddModal && (
+        <div className="fixed inset-0 bg-black/50 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+          <div className="bg-white rounded-xl max-w-2xl w-full p-6 animate-slide-up max-h-[90vh] overflow-y-auto">
+            <div className="flex items-center justify-between mb-6">
+              <h3 className="text-lg font-semibold text-gray-900">Add New Employee</h3>
+              <button
+                onClick={() => setShowAddModal(false)}
+                className="p-2 hover:bg-gray-100 rounded-lg transition-colors"
+              >
+                <X className="w-5 h-5 text-gray-500" />
+              </button>
+            </div>
+            <form
+              onSubmit={(e) => {
+                e.preventDefault();
+                const formData = new FormData(e.currentTarget);
+                createEmployeeMutation.mutate({
+                  employeeId: formData.get('employeeId') as string,
+                  firstName: formData.get('firstName') as string,
+                  lastName: formData.get('lastName') as string,
+                  email: formData.get('email') as string,
+                  phone: formData.get('phone') as string || undefined,
+                  hireDate: formData.get('hireDate') as string,
+                  doublesEndorsement: formData.get('doublesEndorsement') === 'on',
+                  chainExperience: formData.get('chainExperience') === 'on',
+                });
+              }}
+              className="space-y-4"
+            >
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div>
+                  <label className="label" htmlFor="add-employeeId">Employee ID</label>
+                  <input
+                    type="text"
+                    id="add-employeeId"
+                    name="employeeId"
+                    className="input-field"
+                    placeholder="e.g., EMP001"
+                    required
+                  />
+                </div>
+                <div>
+                  <label className="label" htmlFor="add-email">Email</label>
+                  <input
+                    type="email"
+                    id="add-email"
+                    name="email"
+                    className="input-field"
+                    placeholder="john.doe@example.com"
+                    required
+                  />
+                </div>
+                <div>
+                  <label className="label" htmlFor="add-firstName">First Name</label>
+                  <input
+                    type="text"
+                    id="add-firstName"
+                    name="firstName"
+                    className="input-field"
+                    placeholder="John"
+                    required
+                  />
+                </div>
+                <div>
+                  <label className="label" htmlFor="add-lastName">Last Name</label>
+                  <input
+                    type="text"
+                    id="add-lastName"
+                    name="lastName"
+                    className="input-field"
+                    placeholder="Doe"
+                    required
+                  />
+                </div>
+                <div>
+                  <label className="label" htmlFor="add-phone">Phone</label>
+                  <input
+                    type="tel"
+                    id="add-phone"
+                    name="phone"
+                    className="input-field"
+                    placeholder="(555) 123-4567"
+                  />
+                </div>
+                <div>
+                  <label className="label" htmlFor="add-hireDate">Hire Date</label>
+                  <input
+                    type="date"
+                    id="add-hireDate"
+                    name="hireDate"
+                    className="input-field"
+                    required
+                  />
+                </div>
+              </div>
+              <div className="space-y-3">
+                <label className="flex items-center gap-3">
+                  <input
+                    type="checkbox"
+                    name="doublesEndorsement"
+                    className="w-4 h-4 text-primary-600 border-gray-300 rounded focus:ring-primary-500"
+                  />
+                  <span className="text-sm font-medium text-gray-700">Doubles Endorsement</span>
+                </label>
+                <label className="flex items-center gap-3">
+                  <input
+                    type="checkbox"
+                    name="chainExperience"
+                    className="w-4 h-4 text-primary-600 border-gray-300 rounded focus:ring-primary-500"
+                  />
+                  <span className="text-sm font-medium text-gray-700">Chain Experience</span>
+                </label>
+              </div>
+              <div className="flex gap-3 justify-end pt-4">
+                <button
+                  type="button"
+                  onClick={() => setShowAddModal(false)}
+                  className="btn-secondary"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  disabled={createEmployeeMutation.isPending}
+                  className="btn-primary"
+                >
+                  {createEmployeeMutation.isPending ? 'Adding...' : 'Add Employee'}
+                </button>
+              </div>
+            </form>
           </div>
         </div>
       )}
