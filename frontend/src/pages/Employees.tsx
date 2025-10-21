@@ -82,13 +82,19 @@ const Employees = () => {
 
   // Create employee mutation
   const createEmployeeMutation = useMutation({
-    mutationFn: async (data: Omit<Employee, 'id' | 'user'>) => {
+    mutationFn: async (data: any) => {
       const response = await apiClient.post('/employees', data);
       return response.data;
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['employees'] });
       setShowAddModal(false);
+    },
+    onError: (error: any) => {
+      console.error('Failed to create employee:', error);
+      const errorMessage = error.response?.data?.error || 'Failed to create employee';
+      const errorDetails = error.response?.data?.details || '';
+      alert(`${errorMessage}\n${errorDetails}`);
     },
   });
 
@@ -555,7 +561,7 @@ const Employees = () => {
               onSubmit={(e) => {
                 e.preventDefault();
                 const formData = new FormData(e.currentTarget);
-                createEmployeeMutation.mutate({
+                const payload: any = {
                   employeeId: formData.get('employeeId') as string,
                   firstName: formData.get('firstName') as string,
                   lastName: formData.get('lastName') as string,
@@ -565,7 +571,12 @@ const Employees = () => {
                   doublesEndorsement: formData.get('doublesEndorsement') === 'on',
                   chainExperience: formData.get('chainExperience') === 'on',
                   isEligible: formData.get('isEligible') !== 'off',
-                });
+                };
+                // Include createUserAccount in the request body
+                if (formData.get('createUserAccount') === 'on') {
+                  payload.createUserAccount = true;
+                }
+                createEmployeeMutation.mutate(payload);
               }}
               className="space-y-4"
             >
@@ -660,6 +671,15 @@ const Employees = () => {
                     className="w-4 h-4 text-primary-600 border-gray-300 rounded focus:ring-primary-500"
                   />
                   <span className="text-sm font-medium text-gray-700">Eligible for Route Selection</span>
+                </label>
+                <label className="flex items-center gap-3">
+                  <input
+                    type="checkbox"
+                    name="createUserAccount"
+                    defaultChecked
+                    className="w-4 h-4 text-primary-600 border-gray-300 rounded focus:ring-primary-500"
+                  />
+                  <span className="text-sm font-medium text-gray-700">Create User Account (password: driver123)</span>
                 </label>
               </div>
               <div className="flex gap-3 justify-end pt-4">

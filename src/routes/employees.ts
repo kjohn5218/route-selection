@@ -245,6 +245,7 @@ router.post('/', authenticateToken, requireAdmin, async (req: Request, res: Resp
   try {
     console.log('Create employee request body:', req.body);
     const data = createEmployeeSchema.parse(req.body);
+    const createUserAccount = req.body.createUserAccount !== false; // Default to true
 
     // Check if employee ID already exists
     const existingEmployee = await prisma.employee.findUnique({
@@ -255,13 +256,40 @@ router.post('/', authenticateToken, requireAdmin, async (req: Request, res: Resp
       return res.status(409).json({ error: 'Employee ID already exists' });
     }
 
-    // Check if email already exists
+    // Check if email already exists in employees
     const existingEmailEmployee = await prisma.employee.findUnique({
       where: { email: data.email },
     });
 
     if (existingEmailEmployee) {
       return res.status(409).json({ error: 'Email already exists' });
+    }
+
+    // Check if user exists with this email
+    let existingUser = await prisma.user.findUnique({
+      where: { email: data.email },
+    });
+
+    // Create user account if requested and doesn't exist
+    if (createUserAccount && !existingUser) {
+      const { hashPassword } = await import('../utils/auth.js');
+      const defaultPassword = await hashPassword('driver123'); // Default password
+      
+      existingUser = await prisma.user.create({
+        data: {
+          email: data.email,
+          password: defaultPassword,
+          role: 'DRIVER',
+        },
+      });
+    }
+
+    // If no user exists at this point, we can't create the employee
+    if (!existingUser) {
+      return res.status(400).json({ 
+        error: 'No user account exists for this email address',
+        details: 'Either create a user account first or enable automatic user creation'
+      });
     }
 
     const employee = await prisma.employee.create({
@@ -272,12 +300,29 @@ router.post('/', authenticateToken, requireAdmin, async (req: Request, res: Resp
     });
 
     res.status(201).json(employee);
-  } catch (error) {
+  } catch (error: any) {
     console.error('Create employee error:', error);
     if (error instanceof z.ZodError) {
       return res.status(400).json({ error: 'Invalid input', details: error.errors });
     }
-    res.status(500).json({ error: 'Internal server error' });
+    // Provide more detailed error information for debugging
+    if (error.code === 'P2003') {
+      return res.status(400).json({ 
+        error: 'A user account must exist with this email before creating an employee record',
+        details: 'Foreign key constraint failed on the field: ' + error.meta?.field_name
+      });
+    }
+    if (error.code === 'P2002') {
+      const target = error.meta?.target;
+      return res.status(409).json({ 
+        error: `Duplicate value for field: ${target}`,
+        details: error.message
+      });
+    }
+    res.status(500).json({ 
+      error: 'Internal server error',
+      details: process.env.NODE_ENV === 'development' ? error.message : undefined
+    });
   }
 });
 
