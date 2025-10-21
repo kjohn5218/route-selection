@@ -20,16 +20,21 @@ import LoadingSpinner from '../components/LoadingSpinner';
 
 interface Route {
   id: string;
-  routeNumber: string;
-  description: string;
-  startLocation: string;
-  endLocation: string;
-  estimatedHours: number;
+  runNumber: string;
+  type: string;
+  origin: string;
+  destination: string;
+  days: string;
   startTime: string;
-  requiresDoubles: boolean;
-  requiresChains: boolean;
+  endTime: string;
+  distance: number;
+  rateType: string;
+  workTime: number;
+  requiresDoublesEndorsement: boolean;
+  requiresChainExperience: boolean;
   isActive: boolean;
   createdAt: string;
+  updatedAt: string;
 }
 
 const RouteManagement = () => {
@@ -74,10 +79,10 @@ const RouteManagement = () => {
 
   const filteredRoutes = routes?.filter(route => {
     const matchesSearch = 
-      route.routeNumber.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      route.description.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      route.startLocation.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      route.endLocation.toLowerCase().includes(searchTerm.toLowerCase());
+      route.runNumber.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      route.type.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      route.origin.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      route.destination.toLowerCase().includes(searchTerm.toLowerCase());
     
     const matchesStatus = 
       statusFilter === 'all' || 
@@ -127,8 +132,8 @@ const RouteManagement = () => {
   const routeStats = {
     total: routes?.length || 0,
     active: routes?.filter(r => r.isActive).length || 0,
-    requiresDoubles: routes?.filter(r => r.requiresDoubles).length || 0,
-    requiresChains: routes?.filter(r => r.requiresChains).length || 0,
+    requiresDoubles: routes?.filter(r => r.requiresDoublesEndorsement).length || 0,
+    requiresChains: routes?.filter(r => r.requiresChainExperience).length || 0,
   };
 
   return (
@@ -235,8 +240,8 @@ const RouteManagement = () => {
                     <RouteIcon className="w-5 h-5 text-primary-600" />
                   </div>
                   <div>
-                    <h3 className="font-semibold text-gray-900">Route {route.routeNumber}</h3>
-                    <p className="text-sm text-gray-500">{route.description}</p>
+                    <h3 className="font-semibold text-gray-900">Route {route.runNumber}</h3>
+                    <p className="text-sm text-gray-500">{route.type} - {route.days}</p>
                   </div>
                 </div>
                 <div className="flex items-center gap-2">
@@ -254,31 +259,35 @@ const RouteManagement = () => {
               <div className="space-y-3 mb-4">
                 <div className="flex items-center gap-2 text-sm text-gray-600">
                   <MapPin className="w-4 h-4" />
-                  <span>{route.startLocation} → {route.endLocation}</span>
+                  <span>{route.origin} → {route.destination}</span>
                 </div>
                 <div className="flex items-center gap-2 text-sm text-gray-600">
                   <Clock className="w-4 h-4" />
-                  <span>{route.estimatedHours} hours</span>
+                  <span>{route.workTime} hours ({route.rateType})</span>
                 </div>
                 <div className="flex items-center gap-2 text-sm text-gray-600">
                   <Calendar className="w-4 h-4" />
-                  <span>Start: {route.startTime}</span>
+                  <span>{route.startTime} - {route.endTime}</span>
+                </div>
+                <div className="flex items-center gap-2 text-sm text-gray-600">
+                  <Truck className="w-4 h-4" />
+                  <span>{route.distance} miles</span>
                 </div>
               </div>
 
               {/* Requirements */}
               <div className="flex flex-wrap gap-2 mb-4">
-                {route.requiresDoubles && (
+                {route.requiresDoublesEndorsement && (
                   <span className="inline-flex items-center px-2 py-1 rounded-full text-xs font-medium bg-yellow-100 text-yellow-800">
                     Doubles Required
                   </span>
                 )}
-                {route.requiresChains && (
+                {route.requiresChainExperience && (
                   <span className="inline-flex items-center px-2 py-1 rounded-full text-xs font-medium bg-orange-100 text-orange-800">
                     Chains Required
                   </span>
                 )}
-                {!route.requiresDoubles && !route.requiresChains && (
+                {!route.requiresDoublesEndorsement && !route.requiresChainExperience && (
                   <span className="inline-flex items-center px-2 py-1 rounded-full text-xs font-medium bg-gray-100 text-gray-800">
                     Standard Route
                   </span>
@@ -354,7 +363,7 @@ const RouteManagement = () => {
               <h3 className="text-lg font-semibold text-gray-900">Delete Route</h3>
             </div>
             <p className="text-gray-600 mb-6">
-              Are you sure you want to delete Route {selectedRoute.routeNumber}? 
+              Are you sure you want to delete Route {selectedRoute.runNumber}? 
               This action cannot be undone and may affect existing selections.
             </p>
             <div className="flex gap-3 justify-end">
