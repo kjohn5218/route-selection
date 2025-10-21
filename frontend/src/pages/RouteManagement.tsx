@@ -228,127 +228,145 @@ const RouteManagement = () => {
         </div>
       </div>
 
-      {/* Routes Grid */}
-      <div className="grid grid-cols-1 lg:grid-cols-2 xl:grid-cols-3 gap-6">
-        {filteredRoutes.map((route) => (
-          <div key={route.id} className="card">
-            <div className="p-6">
-              {/* Route Header */}
-              <div className="flex items-start justify-between mb-4">
-                <div className="flex items-center gap-3">
-                  <div className="bg-primary-100 p-2 rounded-lg">
-                    <RouteIcon className="w-5 h-5 text-primary-600" />
-                  </div>
-                  <div>
-                    <h3 className="font-semibold text-gray-900">Route {route.runNumber}</h3>
-                    <p className="text-sm text-gray-500">{route.type} - {route.days}</p>
-                  </div>
-                </div>
-                <div className="flex items-center gap-2">
-                  <span className={`inline-flex items-center px-2 py-1 rounded-full text-xs font-medium ${
-                    route.isActive 
-                      ? 'bg-green-100 text-green-800' 
-                      : 'bg-gray-100 text-gray-800'
-                  }`}>
-                    {route.isActive ? 'Active' : 'Inactive'}
-                  </span>
-                </div>
-              </div>
-
-              {/* Route Details */}
-              <div className="space-y-3 mb-4">
-                <div className="flex items-center gap-2 text-sm text-gray-600">
-                  <MapPin className="w-4 h-4" />
-                  <span>{route.origin} → {route.destination}</span>
-                </div>
-                <div className="flex items-center gap-2 text-sm text-gray-600">
-                  <Clock className="w-4 h-4" />
-                  <span>{route.workTime} hours ({route.rateType})</span>
-                </div>
-                <div className="flex items-center gap-2 text-sm text-gray-600">
-                  <Calendar className="w-4 h-4" />
-                  <span>{route.startTime} - {route.endTime}</span>
-                </div>
-                <div className="flex items-center gap-2 text-sm text-gray-600">
-                  <Truck className="w-4 h-4" />
-                  <span>{route.distance} miles</span>
-                </div>
-              </div>
-
-              {/* Requirements */}
-              <div className="flex flex-wrap gap-2 mb-4">
-                {route.requiresDoublesEndorsement && (
-                  <span className="inline-flex items-center px-2 py-1 rounded-full text-xs font-medium bg-yellow-100 text-yellow-800">
-                    Doubles Required
-                  </span>
+      {/* Routes Table */}
+      <div className="card overflow-hidden">
+        <div className="overflow-x-auto">
+          <table className="w-full">
+            <thead className="bg-gray-50 border-b border-gray-200">
+              <tr>
+                <th className="text-left py-3 px-6 font-medium text-gray-900">Route</th>
+                <th className="text-left py-3 px-6 font-medium text-gray-900">Type</th>
+                <th className="text-left py-3 px-6 font-medium text-gray-900">Origin → Destination</th>
+                <th className="text-left py-3 px-6 font-medium text-gray-900">Schedule</th>
+                <th className="text-left py-3 px-6 font-medium text-gray-900">Days</th>
+                <th className="text-left py-3 px-6 font-medium text-gray-900">Distance</th>
+                <th className="text-left py-3 px-6 font-medium text-gray-900">Work Time</th>
+                <th className="text-left py-3 px-6 font-medium text-gray-900">Requirements</th>
+                <th className="text-left py-3 px-6 font-medium text-gray-900">Status</th>
+                {user?.role !== 'Driver' && (
+                  <th className="text-left py-3 px-6 font-medium text-gray-900">Actions</th>
                 )}
-                {route.requiresChainExperience && (
-                  <span className="inline-flex items-center px-2 py-1 rounded-full text-xs font-medium bg-orange-100 text-orange-800">
-                    Chains Required
-                  </span>
-                )}
-                {!route.requiresDoublesEndorsement && !route.requiresChainExperience && (
-                  <span className="inline-flex items-center px-2 py-1 rounded-full text-xs font-medium bg-gray-100 text-gray-800">
-                    Standard Route
-                  </span>
-                )}
-              </div>
-
-              {/* Actions */}
-              {user?.role !== 'Driver' && (
-                <div className="flex items-center gap-2 pt-4 border-t border-gray-100">
-                  <button
-                    onClick={() => toggleRouteStatus(route)}
-                    disabled={toggleStatusMutation.isPending}
-                    className={`flex-1 py-2 px-3 rounded-lg text-sm font-medium transition-all ${
-                      route.isActive
-                        ? 'bg-gray-100 text-gray-700 hover:bg-gray-200'
-                        : 'bg-green-100 text-green-700 hover:bg-green-200'
-                    }`}
-                  >
-                    {route.isActive ? 'Deactivate' : 'Activate'}
-                  </button>
-                  <button
-                    onClick={() => setSelectedRoute(route)}
-                    className="p-2 text-gray-500 hover:text-primary-600 hover:bg-primary-50 rounded-lg transition-all"
-                    title="Edit route"
-                  >
-                    <Edit className="w-4 h-4" />
-                  </button>
-                  <button
-                    onClick={() => handleDelete(route)}
-                    className="p-2 text-gray-500 hover:text-red-600 hover:bg-red-50 rounded-lg transition-all"
-                    title="Delete route"
-                  >
-                    <Trash2 className="w-4 h-4" />
-                  </button>
-                </div>
-              )}
-            </div>
-          </div>
-        ))}
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-gray-200">
+              {filteredRoutes.map((route) => (
+                <tr key={route.id} className="hover:bg-gray-50 transition-colors">
+                  <td className="py-4 px-6">
+                    <div className="flex items-center gap-2">
+                      <div className="bg-primary-100 p-1.5 rounded">
+                        <RouteIcon className="w-4 h-4 text-primary-600" />
+                      </div>
+                      <span className="font-medium text-gray-900">{route.runNumber}</span>
+                    </div>
+                  </td>
+                  <td className="py-4 px-6">
+                    <span className="text-sm text-gray-900">{route.type}</span>
+                  </td>
+                  <td className="py-4 px-6">
+                    <div className="flex items-center gap-2 text-sm text-gray-900">
+                      <MapPin className="w-4 h-4 text-gray-400" />
+                      <span>{route.origin} → {route.destination}</span>
+                    </div>
+                  </td>
+                  <td className="py-4 px-6">
+                    <div className="flex items-center gap-2 text-sm text-gray-900">
+                      <Clock className="w-4 h-4 text-gray-400" />
+                      <span>{route.startTime} - {route.endTime}</span>
+                    </div>
+                  </td>
+                  <td className="py-4 px-6">
+                    <span className="text-sm text-gray-900">{route.days}</span>
+                  </td>
+                  <td className="py-4 px-6">
+                    <span className="text-sm text-gray-900">{route.distance} mi</span>
+                  </td>
+                  <td className="py-4 px-6">
+                    <span className="text-sm text-gray-900">{route.workTime}h ({route.rateType})</span>
+                  </td>
+                  <td className="py-4 px-6">
+                    <div className="flex flex-wrap gap-1">
+                      {route.requiresDoublesEndorsement && (
+                        <span className="inline-flex items-center px-2 py-1 rounded-full text-xs font-medium bg-yellow-100 text-yellow-800">
+                          Doubles
+                        </span>
+                      )}
+                      {route.requiresChainExperience && (
+                        <span className="inline-flex items-center px-2 py-1 rounded-full text-xs font-medium bg-orange-100 text-orange-800">
+                          Chains
+                        </span>
+                      )}
+                      {!route.requiresDoublesEndorsement && !route.requiresChainExperience && (
+                        <span className="inline-flex items-center px-2 py-1 rounded-full text-xs font-medium bg-gray-100 text-gray-800">
+                          Standard
+                        </span>
+                      )}
+                    </div>
+                  </td>
+                  <td className="py-4 px-6">
+                    <span className={`inline-flex items-center px-2 py-1 rounded-full text-xs font-medium ${
+                      route.isActive 
+                        ? 'bg-green-100 text-green-800' 
+                        : 'bg-gray-100 text-gray-800'
+                    }`}>
+                      {route.isActive ? 'Active' : 'Inactive'}
+                    </span>
+                  </td>
+                  {user?.role !== 'Driver' && (
+                    <td className="py-4 px-6">
+                      <div className="flex items-center gap-2">
+                        <button
+                          onClick={() => toggleRouteStatus(route)}
+                          disabled={toggleStatusMutation.isPending}
+                          className={`py-1 px-3 rounded text-xs font-medium transition-all ${
+                            route.isActive
+                              ? 'bg-gray-100 text-gray-700 hover:bg-gray-200'
+                              : 'bg-green-100 text-green-700 hover:bg-green-200'
+                          }`}
+                        >
+                          {route.isActive ? 'Deactivate' : 'Activate'}
+                        </button>
+                        <button
+                          onClick={() => setSelectedRoute(route)}
+                          className="p-1.5 text-gray-500 hover:text-primary-600 hover:bg-primary-50 rounded transition-all"
+                          title="Edit route"
+                        >
+                          <Edit className="w-3 h-3" />
+                        </button>
+                        <button
+                          onClick={() => handleDelete(route)}
+                          className="p-1.5 text-gray-500 hover:text-red-600 hover:bg-red-50 rounded transition-all"
+                          title="Delete route"
+                        >
+                          <Trash2 className="w-3 h-3" />
+                        </button>
+                      </div>
+                    </td>
+                  )}
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
       </div>
 
       {filteredRoutes.length === 0 && (
-        <div className="card">
-          <div className="text-center py-12">
-            <RouteIcon className="w-12 h-12 text-gray-400 mx-auto mb-4" />
-            <h3 className="text-lg font-medium text-gray-900 mb-2">No routes found</h3>
-            <p className="text-gray-500 mb-4">
-              {searchTerm || statusFilter !== 'all' 
-                ? 'Try adjusting your search criteria or filters' 
-                : 'Get started by adding your first route'
-              }
-            </p>
-            {user?.role !== 'Driver' && !searchTerm && statusFilter === 'all' && (
-              <button
-                onClick={() => setShowAddModal(true)}
-                className="btn-primary"
-              >
-                Add First Route
-              </button>
-            )}
-          </div>
+        <div className="text-center py-12">
+          <RouteIcon className="w-12 h-12 text-gray-400 mx-auto mb-4" />
+          <h3 className="text-lg font-medium text-gray-900 mb-2">No routes found</h3>
+          <p className="text-gray-500 mb-4">
+            {searchTerm || statusFilter !== 'all' 
+              ? 'Try adjusting your search criteria or filters' 
+              : 'Get started by adding your first route'
+            }
+          </p>
+          {user?.role !== 'Driver' && !searchTerm && statusFilter === 'all' && (
+            <button
+              onClick={() => setShowAddModal(true)}
+              className="btn-primary"
+            >
+              Add First Route
+            </button>
+          )}
         </div>
       )}
 
