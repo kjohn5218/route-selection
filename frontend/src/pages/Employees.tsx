@@ -30,6 +30,7 @@ interface Employee {
   hireDate: string;
   doublesEndorsement: boolean;
   chainExperience: boolean;
+  isEligible: boolean;
   user?: {
     id: string;
     role: string;
@@ -301,15 +302,22 @@ const Employees = () => {
                     </div>
                   </td>
                   <td className="py-4 px-6">
-                    {employee.user ? (
-                      <span className="inline-flex items-center px-2 py-1 rounded-full text-xs font-medium bg-green-100 text-green-800">
-                        Active
-                      </span>
-                    ) : (
-                      <span className="inline-flex items-center px-2 py-1 rounded-full text-xs font-medium bg-gray-100 text-gray-800">
-                        Inactive
-                      </span>
-                    )}
+                    <div className="space-y-1">
+                      {employee.user ? (
+                        <span className="inline-flex items-center px-2 py-1 rounded-full text-xs font-medium bg-green-100 text-green-800">
+                          Active
+                        </span>
+                      ) : (
+                        <span className="inline-flex items-center px-2 py-1 rounded-full text-xs font-medium bg-gray-100 text-gray-800">
+                          Inactive
+                        </span>
+                      )}
+                      {!employee.isEligible && (
+                        <span className="inline-flex items-center px-2 py-1 rounded-full text-xs font-medium bg-red-100 text-red-800">
+                          Not Eligible
+                        </span>
+                      )}
+                    </div>
                   </td>
                   {user?.role !== 'Driver' && (
                     <td className="py-4 px-6">
@@ -408,6 +416,7 @@ const Employees = () => {
                   hireDate: formData.get('hireDate') as string,
                   doublesEndorsement: formData.get('doublesEndorsement') === 'on',
                   chainExperience: formData.get('chainExperience') === 'on',
+                  isEligible: formData.get('isEligible') === 'on',
                 });
               }}
               className="space-y-4"
@@ -498,6 +507,15 @@ const Employees = () => {
                   />
                   <span className="text-sm font-medium text-gray-700">Chain Experience</span>
                 </label>
+                <label className="flex items-center gap-3">
+                  <input
+                    type="checkbox"
+                    name="isEligible"
+                    defaultChecked={selectedEmployee.isEligible}
+                    className="w-4 h-4 text-primary-600 border-gray-300 rounded focus:ring-primary-500"
+                  />
+                  <span className="text-sm font-medium text-gray-700">Eligible for Route Selection</span>
+                </label>
               </div>
               <div className="flex gap-3 justify-end pt-4">
                 <button
@@ -546,6 +564,7 @@ const Employees = () => {
                   hireDate: formData.get('hireDate') as string,
                   doublesEndorsement: formData.get('doublesEndorsement') === 'on',
                   chainExperience: formData.get('chainExperience') === 'on',
+                  isEligible: formData.get('isEligible') !== 'off',
                 });
               }}
               className="space-y-4"
@@ -632,6 +651,15 @@ const Employees = () => {
                     className="w-4 h-4 text-primary-600 border-gray-300 rounded focus:ring-primary-500"
                   />
                   <span className="text-sm font-medium text-gray-700">Chain Experience</span>
+                </label>
+                <label className="flex items-center gap-3">
+                  <input
+                    type="checkbox"
+                    name="isEligible"
+                    defaultChecked
+                    className="w-4 h-4 text-primary-600 border-gray-300 rounded focus:ring-primary-500"
+                  />
+                  <span className="text-sm font-medium text-gray-700">Eligible for Route Selection</span>
                 </label>
               </div>
               <div className="flex gap-3 justify-end pt-4">

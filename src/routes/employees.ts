@@ -243,6 +243,7 @@ router.get('/:id', authenticateToken, requireAdminOrSelf, async (req: Request, r
 // POST /api/employees - Create new employee (Admin only)
 router.post('/', authenticateToken, requireAdmin, async (req: Request, res: Response) => {
   try {
+    console.log('Create employee request body:', req.body);
     const data = createEmployeeSchema.parse(req.body);
 
     // Check if employee ID already exists
