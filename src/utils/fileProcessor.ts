@@ -1,5 +1,5 @@
 import * as XLSX from 'xlsx';
-import * as Papa from 'papaparse';
+import Papa from 'papaparse';
 import { z } from 'zod';
 
 // Define schemas for import validation
