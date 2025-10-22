@@ -22,7 +22,7 @@ async function seed() {
     const routes = [
       {
         runNumber: 'R001',
-        type: 'LOCAL',
+        type: 'SINGLES',
         origin: 'Seattle Terminal',
         destination: 'Tacoma Warehouse',
         days: 'Mon-Fri',
@@ -36,7 +36,7 @@ async function seed() {
       },
       {
         runNumber: 'R002',
-        type: 'REGIONAL',
+        type: 'DOUBLES',
         origin: 'Seattle Terminal',
         destination: 'Portland Hub',
         days: 'Mon-Fri',
@@ -50,7 +50,7 @@ async function seed() {
       },
       {
         runNumber: 'R003',
-        type: 'LONG_HAUL',
+        type: 'DOUBLES',
         origin: 'Seattle Terminal',
         destination: 'Los Angeles Distribution',
         days: 'Mon-Thu',
@@ -64,7 +64,7 @@ async function seed() {
       },
       {
         runNumber: 'R004',
-        type: 'LOCAL',
+        type: 'SINGLES',
         origin: 'Spokane Terminal',
         destination: 'Coeur d\'Alene Store',
         days: 'Tue-Sat',
@@ -78,14 +78,14 @@ async function seed() {
       },
       {
         runNumber: 'R005',
-        type: 'DEDICATED',
+        type: 'SINGLES',
         origin: 'Bellevue Customer Site',
         destination: 'Various Locations',
         days: 'Mon-Fri',
         startTime: '08:00',
         endTime: '16:00',
         distance: 89.3,
-        rateType: 'SALARY',
+        rateType: 'FLAT_RATE',
         workTime: 8.0,
         requiresDoublesEndorsement: false,
         requiresChainExperience: false,

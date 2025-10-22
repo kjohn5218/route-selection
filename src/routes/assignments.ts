@@ -479,4 +479,93 @@ router.get('/summary/:periodId', authenticateToken, requireAdmin, async (req: Re
   }
 });
 
+// POST /api/assignments/notify/:periodId - Send assignment notifications
+router.post('/notify/:periodId', authenticateToken, requireAdmin, async (req: Request, res: Response) => {
+  try {
+    const { periodId } = req.params;
+
+    const period = await prisma.selectionPeriod.findUnique({
+      where: { id: periodId },
+    });
+
+    if (!period) {
+      return res.status(404).json({ error: 'Selection period not found' });
+    }
+
+    if (period.status !== 'COMPLETED') {
+      return res.status(400).json({ 
+        error: 'Assignments must be completed before sending notifications' 
+      });
+    }
+
+    // Get all assignments with employee and route details
+    const assignments = await prisma.assignment.findMany({
+      where: { selectionPeriodId: periodId },
+      include: {
+        employee: {
+          include: {
+            user: {
+              select: { email: true },
+            },
+          },
+        },
+        route: {
+          select: {
+            runNumber: true,
+            origin: true,
+            destination: true,
+            type: true,
+            days: true,
+            startTime: true,
+            endTime: true,
+          },
+        },
+      },
+    });
+
+    const notificationsToSend = assignments.filter(a => a.employee.user?.email).map(assignment => {
+      const isFloatPool = !assignment.route;
+      const routeDetails = assignment.route ? 
+        `Route ${assignment.route.runNumber} (${assignment.route.origin} → ${assignment.route.destination})` :
+        'Float Pool';
+      
+      return {
+        employeeId: assignment.employee.id,
+        email: assignment.employee.user!.email,
+        employeeName: `${assignment.employee.firstName} ${assignment.employee.lastName}`,
+        assignment: routeDetails,
+        choiceReceived: assignment.choiceReceived,
+        effectiveDate: assignment.effectiveDate,
+        isFloatPool,
+      };
+    });
+
+    // Log the notification attempt
+    await prisma.auditLog.create({
+      data: {
+        userId: req.user!.id,
+        action: 'SEND_ASSIGNMENT_NOTIFICATIONS',
+        resource: 'Assignment',
+        details: `Sent assignment notifications to ${notificationsToSend.length} employees for period: ${period.name}`,
+      },
+    });
+
+    // TODO: Integrate with actual email service
+    console.log(`Sending assignment notifications to ${notificationsToSend.length} employees`);
+
+    res.json({
+      success: true,
+      notificationsSent: notificationsToSend.length,
+      totalAssignments: assignments.length,
+      period: {
+        id: period.id,
+        name: period.name,
+      },
+    });
+  } catch (error) {
+    console.error('Send assignment notifications error:', error);
+    res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
 export default router;

@@ -71,21 +71,24 @@ model Route {
   secondChoiceSelections Selection[] @relation("SecondChoice")
   thirdChoiceSelections  Selection[] @relation("ThirdChoice")
   assignments      Assignment[]
+  periodRoutes     PeriodRoute[]
 
   @@map("routes")
 }
 
 model SelectionPeriod {
-  id         String              @id @default(cuid())
-  name       String
-  startDate  DateTime
-  endDate    DateTime
-  status     String              @default("UPCOMING") // UPCOMING, OPEN, CLOSED, PROCESSING, COMPLETED
-  createdAt  DateTime            @default(now())
-  updatedAt  DateTime            @updatedAt
+  id          String              @id @default(cuid())
+  name        String
+  description String?
+  startDate   DateTime
+  endDate     DateTime
+  status      String              @default("UPCOMING") // UPCOMING, OPEN, CLOSED, PROCESSING, COMPLETED
+  createdAt   DateTime            @default(now())
+  updatedAt   DateTime            @updatedAt
 
   selections  Selection[]
   assignments Assignment[]
+  routes      PeriodRoute[]
 
   @@map("selection_periods")
 }
@@ -154,6 +157,18 @@ model AuditLog {
   timestamp DateTime @default(now())
 
   @@map("audit_logs")
+}
+
+model PeriodRoute {
+  selectionPeriodId String
+  routeId           String
+  createdAt         DateTime @default(now())
+
+  selectionPeriod SelectionPeriod @relation(fields: [selectionPeriodId], references: [id], onDelete: Cascade)
+  route           Route           @relation(fields: [routeId], references: [id], onDelete: Cascade)
+
+  @@id([selectionPeriodId, routeId])
+  @@map("period_routes")
 }
 
 // Enums are replaced with string constants for SQLite compatibility

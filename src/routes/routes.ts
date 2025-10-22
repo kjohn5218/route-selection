@@ -105,6 +105,96 @@ router.get('/', authenticateToken, async (req: Request, res: Response) => {
   }
 });
 
+// GET /api/routes/available/:selectionPeriodId - Get available routes for selection period
+router.get('/available/:selectionPeriodId', authenticateToken, async (req: Request, res: Response) => {
+  try {
+    const { selectionPeriodId } = req.params;
+
+    // Check if selection period exists and is open
+    const selectionPeriod = await prisma.selectionPeriod.findUnique({
+      where: { id: selectionPeriodId },
+    });
+
+    if (!selectionPeriod) {
+      return res.status(404).json({ error: 'Selection period not found' });
+    }
+
+    if (selectionPeriod.status !== 'OPEN') {
+      return res.status(400).json({ error: 'Selection period is not open' });
+    }
+
+    // Get current user's employee profile
+    const employee = req.user?.employeeId ? await prisma.employee.findUnique({
+      where: { id: req.user.employeeId },
+      select: {
+        doublesEndorsement: true,
+        chainExperience: true,
+      }
+    }) : null;
+
+    // Get routes that are part of this selection period
+    const periodRoutes = await prisma.periodRoute.findMany({
+      where: { selectionPeriodId },
+      select: { routeId: true },
+    });
+
+    const periodRouteIds = periodRoutes.map(pr => pr.routeId);
+
+    // Get routes that are active and not yet assigned for this period
+    const assignedRouteIds = await prisma.assignment.findMany({
+      where: { selectionPeriodId },
+      select: { routeId: true },
+    });
+
+    const assignedIds = assignedRouteIds
+      .filter(a => a.routeId)
+      .map(a => a.routeId as string);
+
+    const whereClause: any = {
+      id: {
+        in: periodRouteIds,
+        notIn: assignedIds,
+      },
+      isActive: true,
+    };
+
+    // If it's a driver, filter out routes they don't qualify for
+    if (req.user?.role === 'DRIVER' && employee) {
+      whereClause.AND = [];
+      
+      // Filter doubles routes if driver doesn't have endorsement
+      if (!employee.doublesEndorsement) {
+        whereClause.AND.push({
+          OR: [
+            { requiresDoublesEndorsement: false },
+            { requiresDoublesEndorsement: null },
+          ]
+        });
+      }
+      
+      // Filter chain experience routes if driver doesn't have experience
+      if (!employee.chainExperience) {
+        whereClause.AND.push({
+          OR: [
+            { requiresChainExperience: false },
+            { requiresChainExperience: null },
+          ]
+        });
+      }
+    }
+
+    const availableRoutes = await prisma.route.findMany({
+      where: whereClause,
+      orderBy: { runNumber: 'asc' },
+    });
+
+    res.json(availableRoutes);
+  } catch (error) {
+    console.error('Get available routes error:', error);
+    res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
 // GET /api/routes/:id - Get single route
 router.get('/:id', authenticateToken, async (req: Request, res: Response) => {
   try {
@@ -300,87 +390,6 @@ router.delete('/:id', authenticateToken, requireAdmin, async (req: Request, res:
     res.status(204).send();
   } catch (error) {
     console.error('Delete route error:', error);
-    res.status(500).json({ error: 'Internal server error' });
-  }
-});
-
-// GET /api/routes/available/:selectionPeriodId - Get available routes for selection period
-router.get('/available/:selectionPeriodId', authenticateToken, async (req: Request, res: Response) => {
-  try {
-    const { selectionPeriodId } = req.params;
-
-    // Check if selection period exists and is open
-    const selectionPeriod = await prisma.selectionPeriod.findUnique({
-      where: { id: selectionPeriodId },
-    });
-
-    if (!selectionPeriod) {
-      return res.status(404).json({ error: 'Selection period not found' });
-    }
-
-    if (selectionPeriod.status !== 'OPEN') {
-      return res.status(400).json({ error: 'Selection period is not open' });
-    }
-
-    // Get current user's employee profile
-    const employee = req.user?.employeeId ? await prisma.employee.findUnique({
-      where: { id: req.user.employeeId },
-      select: {
-        doublesEndorsement: true,
-        chainExperience: true,
-      }
-    }) : null;
-
-    // Get routes that are active and not yet assigned for this period
-    const assignedRouteIds = await prisma.assignment.findMany({
-      where: { selectionPeriodId },
-      select: { routeId: true },
-    });
-
-    const assignedIds = assignedRouteIds
-      .filter(a => a.routeId)
-      .map(a => a.routeId as string);
-
-    const whereClause: any = {
-      isActive: true,
-      id: {
-        notIn: assignedIds,
-      },
-    };
-
-    // If it's a driver, filter out routes they don't qualify for
-    if (req.user?.role === 'DRIVER' && employee) {
-      whereClause.AND = [];
-      
-      // Filter doubles routes if driver doesn't have endorsement
-      if (!employee.doublesEndorsement) {
-        whereClause.AND.push({
-          OR: [
-            { requiresDoublesEndorsement: false },
-            { requiresDoublesEndorsement: null },
-          ]
-        });
-      }
-      
-      // Filter chain experience routes if driver doesn't have experience
-      if (!employee.chainExperience) {
-        whereClause.AND.push({
-          OR: [
-            { requiresChainExperience: false },
-            { requiresChainExperience: null },
-          ]
-        });
-      }
-    }
-
-    const availableRoutes = await prisma.route.findMany({
-      where: whereClause,
-      orderBy: { runNumber: 'asc' },
-    });
-
-    res.json(availableRoutes);
-  } catch (error) {
-    console.error('Get available routes error:', error);
     res.status(500).json({ error: 'Internal server error' });
   }
 });

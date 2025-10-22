@@ -10,6 +10,7 @@ import RouteManagement from './pages/RouteManagement';
 import Periods from './pages/Periods';
 import Selections from './pages/Selections';
 import ImportExport from './pages/ImportExport';
+import SelectionManagement from './pages/SelectionManagement';
 
 const queryClient = new QueryClient({
   defaultOptions: {
@@ -40,6 +41,7 @@ function App() {
               <Route path="employees" element={<Employees />} />
               <Route path="routes" element={<RouteManagement />} />
               <Route path="periods" element={<Periods />} />
+              <Route path="periods/:periodId/manage" element={<SelectionManagement />} />
               <Route path="selections" element={<Selections />} />
               <Route path="import-export" element={<ImportExport />} />
             </Route>
