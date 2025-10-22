@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { 
   Route as RouteIcon, 
@@ -12,7 +12,8 @@ import {
   Calendar,
   Truck,
   Award,
-  AlertTriangle
+  AlertTriangle,
+  X
 } from 'lucide-react';
 import apiClient from '../api/client';
 import { useAuth } from '../contexts/AuthContext';
@@ -37,6 +38,22 @@ interface Route {
   updatedAt: string;
 }
 
+interface RouteFormData {
+  runNumber: string;
+  type: 'LOCAL' | 'REGIONAL' | 'LONG_HAUL' | 'DEDICATED' | 'DOUBLES';
+  origin: string;
+  destination: string;
+  days: string;
+  startTime: string;
+  endTime: string;
+  distance: number;
+  rateType: 'HOURLY' | 'MILEAGE' | 'SALARY';
+  workTime: number;
+  requiresDoublesEndorsement: boolean;
+  requiresChainExperience: boolean;
+  isActive: boolean;
+}
+
 const RouteManagement = () => {
   const { user } = useAuth();
   const queryClient = useQueryClient();
@@ -44,7 +61,23 @@ const RouteManagement = () => {
   const [showAddModal, setShowAddModal] = useState(false);
   const [selectedRoute, setSelectedRoute] = useState<Route | null>(null);
   const [showDeleteModal, setShowDeleteModal] = useState(false);
+  const [showEditModal, setShowEditModal] = useState(false);
   const [statusFilter, setStatusFilter] = useState<'all' | 'active' | 'inactive'>('all');
+  const [formData, setFormData] = useState<RouteFormData>({
+    runNumber: '',
+    type: 'LOCAL',
+    origin: '',
+    destination: '',
+    days: '',
+    startTime: '',
+    endTime: '',
+    distance: 0,
+    rateType: 'HOURLY',
+    workTime: 0,
+    requiresDoublesEndorsement: false,
+    requiresChainExperience: false,
+    isActive: true,
+  });
 
   // Fetch routes
   const { data: routes, isLoading, error } = useQuery<Route[]>({
@@ -77,6 +110,33 @@ const RouteManagement = () => {
     },
   });
 
+  // Create route mutation
+  const createRouteMutation = useMutation({
+    mutationFn: async (data: RouteFormData) => {
+      const response = await apiClient.post('/routes', data);
+      return response.data;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['routes'] });
+      setShowAddModal(false);
+      resetForm();
+    },
+  });
+
+  // Update route mutation
+  const updateRouteMutation = useMutation({
+    mutationFn: async ({ id, data }: { id: string; data: Partial<RouteFormData> }) => {
+      const response = await apiClient.put(`/routes/${id}`, data);
+      return response.data;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['routes'] });
+      setShowEditModal(false);
+      setSelectedRoute(null);
+      resetForm();
+    },
+  });
+
   const filteredRoutes = routes?.filter(route => {
     const matchesSearch = 
       route.runNumber.toLowerCase().includes(searchTerm.toLowerCase()) ||
@@ -106,6 +166,62 @@ const RouteManagement = () => {
   const toggleRouteStatus = (route: Route) => {
     toggleStatusMutation.mutate({ routeId: route.id, isActive: !route.isActive });
   };
+
+  const resetForm = () => {
+    setFormData({
+      runNumber: '',
+      type: 'LOCAL',
+      origin: '',
+      destination: '',
+      days: '',
+      startTime: '',
+      endTime: '',
+      distance: 0,
+      rateType: 'HOURLY',
+      workTime: 0,
+      requiresDoublesEndorsement: false,
+      requiresChainExperience: false,
+      isActive: true,
+    });
+  };
+
+  const handleEdit = (route: Route) => {
+    setSelectedRoute(route);
+    setFormData({
+      runNumber: route.runNumber,
+      type: route.type as RouteFormData['type'],
+      origin: route.origin,
+      destination: route.destination,
+      days: route.days,
+      startTime: route.startTime,
+      endTime: route.endTime,
+      distance: route.distance,
+      rateType: route.rateType as RouteFormData['rateType'],
+      workTime: route.workTime,
+      requiresDoublesEndorsement: route.requiresDoublesEndorsement,
+      requiresChainExperience: route.requiresChainExperience,
+      isActive: route.isActive,
+    });
+    setShowEditModal(true);
+  };
+
+  const handleSubmitAdd = (e: React.FormEvent) => {
+    e.preventDefault();
+    createRouteMutation.mutate(formData);
+  };
+
+  const handleSubmitEdit = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (selectedRoute) {
+      updateRouteMutation.mutate({ id: selectedRoute.id, data: formData });
+    }
+  };
+
+  useEffect(() => {
+    if (formData.type === 'DOUBLES') {
+      setFormData(prev => ({ ...prev, requiresDoublesEndorsement: true }));
+    }
+  }, [formData.type]);
 
   if (isLoading) {
     return (
@@ -326,7 +442,7 @@ const RouteManagement = () => {
                           {route.isActive ? 'Deactivate' : 'Activate'}
                         </button>
                         <button
-                          onClick={() => setSelectedRoute(route)}
+                          onClick={() => handleEdit(route)}
                           className="p-1.5 text-gray-500 hover:text-primary-600 hover:bg-primary-50 rounded transition-all"
                           title="Edit route"
                         >
@@ -399,6 +515,386 @@ const RouteManagement = () => {
                 {deleteRouteMutation.isPending ? 'Deleting...' : 'Delete'}
               </button>
             </div>
+          </div>
+        </div>
+      )}
+
+      {/* Add Route Modal */}
+      {showAddModal && (
+        <div className="fixed inset-0 bg-black/50 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+          <div className="bg-white rounded-xl max-w-2xl w-full max-h-[90vh] overflow-y-auto p-6 animate-slide-up">
+            <div className="flex items-center justify-between mb-6">
+              <h3 className="text-lg font-semibold text-gray-900">Add New Route</h3>
+              <button
+                onClick={() => {
+                  setShowAddModal(false);
+                  resetForm();
+                }}
+                className="text-gray-400 hover:text-gray-600"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            <form onSubmit={handleSubmitAdd} className="space-y-4">
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">Run Number</label>
+                  <input
+                    type="text"
+                    value={formData.runNumber}
+                    onChange={(e) => setFormData({ ...formData, runNumber: e.target.value })}
+                    className="input-field"
+                    required
+                  />
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">Type</label>
+                  <select
+                    value={formData.type}
+                    onChange={(e) => setFormData({ ...formData, type: e.target.value as RouteFormData['type'] })}
+                    className="input-field"
+                    required
+                  >
+                    <option value="LOCAL">Local</option>
+                    <option value="REGIONAL">Regional</option>
+                    <option value="LONG_HAUL">Long Haul</option>
+                    <option value="DEDICATED">Dedicated</option>
+                    <option value="DOUBLES">Doubles</option>
+                  </select>
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">Origin</label>
+                  <input
+                    type="text"
+                    value={formData.origin}
+                    onChange={(e) => setFormData({ ...formData, origin: e.target.value })}
+                    className="input-field"
+                    required
+                  />
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">Destination</label>
+                  <input
+                    type="text"
+                    value={formData.destination}
+                    onChange={(e) => setFormData({ ...formData, destination: e.target.value })}
+                    className="input-field"
+                    required
+                  />
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">Days</label>
+                  <input
+                    type="text"
+                    value={formData.days}
+                    onChange={(e) => setFormData({ ...formData, days: e.target.value })}
+                    className="input-field"
+                    placeholder="e.g., Mon-Fri"
+                    required
+                  />
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">Start Time</label>
+                  <input
+                    type="time"
+                    value={formData.startTime}
+                    onChange={(e) => setFormData({ ...formData, startTime: e.target.value })}
+                    className="input-field"
+                    required
+                  />
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">End Time</label>
+                  <input
+                    type="time"
+                    value={formData.endTime}
+                    onChange={(e) => setFormData({ ...formData, endTime: e.target.value })}
+                    className="input-field"
+                    required
+                  />
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">Distance (miles)</label>
+                  <input
+                    type="number"
+                    value={formData.distance}
+                    onChange={(e) => setFormData({ ...formData, distance: parseFloat(e.target.value) || 0 })}
+                    className="input-field"
+                    min="0"
+                    step="0.1"
+                    required
+                  />
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">Rate Type</label>
+                  <select
+                    value={formData.rateType}
+                    onChange={(e) => setFormData({ ...formData, rateType: e.target.value as RouteFormData['rateType'] })}
+                    className="input-field"
+                    required
+                  >
+                    <option value="HOURLY">Hourly</option>
+                    <option value="MILEAGE">Mileage</option>
+                    <option value="SALARY">Salary</option>
+                  </select>
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">Work Time (hours)</label>
+                  <input
+                    type="number"
+                    value={formData.workTime}
+                    onChange={(e) => setFormData({ ...formData, workTime: parseFloat(e.target.value) || 0 })}
+                    className="input-field"
+                    min="0"
+                    step="0.5"
+                    required
+                  />
+                </div>
+              </div>
+
+              <div className="space-y-3">
+                <label className="flex items-center gap-2">
+                  <input
+                    type="checkbox"
+                    checked={formData.requiresDoublesEndorsement}
+                    onChange={(e) => setFormData({ ...formData, requiresDoublesEndorsement: e.target.checked })}
+                    className="rounded border-gray-300 text-primary-600 focus:ring-primary-500"
+                    disabled={formData.type === 'DOUBLES'}
+                  />
+                  <span className="text-sm text-gray-700">Requires Doubles Endorsement</span>
+                </label>
+                <label className="flex items-center gap-2">
+                  <input
+                    type="checkbox"
+                    checked={formData.requiresChainExperience}
+                    onChange={(e) => setFormData({ ...formData, requiresChainExperience: e.target.checked })}
+                    className="rounded border-gray-300 text-primary-600 focus:ring-primary-500"
+                  />
+                  <span className="text-sm text-gray-700">Requires Chain Experience</span>
+                </label>
+                <label className="flex items-center gap-2">
+                  <input
+                    type="checkbox"
+                    checked={formData.isActive}
+                    onChange={(e) => setFormData({ ...formData, isActive: e.target.checked })}
+                    className="rounded border-gray-300 text-primary-600 focus:ring-primary-500"
+                  />
+                  <span className="text-sm text-gray-700">Active</span>
+                </label>
+              </div>
+
+              <div className="flex gap-3 justify-end mt-6">
+                <button
+                  type="button"
+                  onClick={() => {
+                    setShowAddModal(false);
+                    resetForm();
+                  }}
+                  className="btn-secondary"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  disabled={createRouteMutation.isPending}
+                  className="btn-primary"
+                >
+                  {createRouteMutation.isPending ? 'Creating...' : 'Create Route'}
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* Edit Route Modal */}
+      {showEditModal && selectedRoute && (
+        <div className="fixed inset-0 bg-black/50 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+          <div className="bg-white rounded-xl max-w-2xl w-full max-h-[90vh] overflow-y-auto p-6 animate-slide-up">
+            <div className="flex items-center justify-between mb-6">
+              <h3 className="text-lg font-semibold text-gray-900">Edit Route</h3>
+              <button
+                onClick={() => {
+                  setShowEditModal(false);
+                  setSelectedRoute(null);
+                  resetForm();
+                }}
+                className="text-gray-400 hover:text-gray-600"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            <form onSubmit={handleSubmitEdit} className="space-y-4">
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">Run Number</label>
+                  <input
+                    type="text"
+                    value={formData.runNumber}
+                    onChange={(e) => setFormData({ ...formData, runNumber: e.target.value })}
+                    className="input-field"
+                    required
+                  />
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">Type</label>
+                  <select
+                    value={formData.type}
+                    onChange={(e) => setFormData({ ...formData, type: e.target.value as RouteFormData['type'] })}
+                    className="input-field"
+                    required
+                  >
+                    <option value="LOCAL">Local</option>
+                    <option value="REGIONAL">Regional</option>
+                    <option value="LONG_HAUL">Long Haul</option>
+                    <option value="DEDICATED">Dedicated</option>
+                    <option value="DOUBLES">Doubles</option>
+                  </select>
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">Origin</label>
+                  <input
+                    type="text"
+                    value={formData.origin}
+                    onChange={(e) => setFormData({ ...formData, origin: e.target.value })}
+                    className="input-field"
+                    required
+                  />
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">Destination</label>
+                  <input
+                    type="text"
+                    value={formData.destination}
+                    onChange={(e) => setFormData({ ...formData, destination: e.target.value })}
+                    className="input-field"
+                    required
+                  />
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">Days</label>
+                  <input
+                    type="text"
+                    value={formData.days}
+                    onChange={(e) => setFormData({ ...formData, days: e.target.value })}
+                    className="input-field"
+                    placeholder="e.g., Mon-Fri"
+                    required
+                  />
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">Start Time</label>
+                  <input
+                    type="time"
+                    value={formData.startTime}
+                    onChange={(e) => setFormData({ ...formData, startTime: e.target.value })}
+                    className="input-field"
+                    required
+                  />
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">End Time</label>
+                  <input
+                    type="time"
+                    value={formData.endTime}
+                    onChange={(e) => setFormData({ ...formData, endTime: e.target.value })}
+                    className="input-field"
+                    required
+                  />
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">Distance (miles)</label>
+                  <input
+                    type="number"
+                    value={formData.distance}
+                    onChange={(e) => setFormData({ ...formData, distance: parseFloat(e.target.value) || 0 })}
+                    className="input-field"
+                    min="0"
+                    step="0.1"
+                    required
+                  />
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">Rate Type</label>
+                  <select
+                    value={formData.rateType}
+                    onChange={(e) => setFormData({ ...formData, rateType: e.target.value as RouteFormData['rateType'] })}
+                    className="input-field"
+                    required
+                  >
+                    <option value="HOURLY">Hourly</option>
+                    <option value="MILEAGE">Mileage</option>
+                    <option value="SALARY">Salary</option>
+                  </select>
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">Work Time (hours)</label>
+                  <input
+                    type="number"
+                    value={formData.workTime}
+                    onChange={(e) => setFormData({ ...formData, workTime: parseFloat(e.target.value) || 0 })}
+                    className="input-field"
+                    min="0"
+                    step="0.5"
+                    required
+                  />
+                </div>
+              </div>
+
+              <div className="space-y-3">
+                <label className="flex items-center gap-2">
+                  <input
+                    type="checkbox"
+                    checked={formData.requiresDoublesEndorsement}
+                    onChange={(e) => setFormData({ ...formData, requiresDoublesEndorsement: e.target.checked })}
+                    className="rounded border-gray-300 text-primary-600 focus:ring-primary-500"
+                    disabled={formData.type === 'DOUBLES'}
+                  />
+                  <span className="text-sm text-gray-700">Requires Doubles Endorsement</span>
+                </label>
+                <label className="flex items-center gap-2">
+                  <input
+                    type="checkbox"
+                    checked={formData.requiresChainExperience}
+                    onChange={(e) => setFormData({ ...formData, requiresChainExperience: e.target.checked })}
+                    className="rounded border-gray-300 text-primary-600 focus:ring-primary-500"
+                  />
+                  <span className="text-sm text-gray-700">Requires Chain Experience</span>
+                </label>
+                <label className="flex items-center gap-2">
+                  <input
+                    type="checkbox"
+                    checked={formData.isActive}
+                    onChange={(e) => setFormData({ ...formData, isActive: e.target.checked })}
+                    className="rounded border-gray-300 text-primary-600 focus:ring-primary-500"
+                  />
+                  <span className="text-sm text-gray-700">Active</span>
+                </label>
+              </div>
+
+              <div className="flex gap-3 justify-end mt-6">
+                <button
+                  type="button"
+                  onClick={() => {
+                    setShowEditModal(false);
+                    setSelectedRoute(null);
+                    resetForm();
+                  }}
+                  className="btn-secondary"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  disabled={updateRouteMutation.isPending}
+                  className="btn-primary"
+                >
+                  {updateRouteMutation.isPending ? 'Updating...' : 'Update Route'}
+                </button>
+              </div>
+            </form>
           </div>
         </div>
       )}
