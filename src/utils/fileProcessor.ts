@@ -5,11 +5,11 @@ import { z } from 'zod';
 // Define schemas for import validation
 const routeImportSchema = z.object({
   runNumber: z.string(),
-  type: z.enum(['LOCAL', 'REGIONAL', 'LONG_HAUL', 'DEDICATED', 'DOUBLES', 'Doubles', 'Singles']).transform(val => {
+  type: z.enum(['SINGLES', 'DOUBLES', 'Singles', 'Doubles', 'LOCAL', 'REGIONAL', 'LONG_HAUL', 'DEDICATED']).transform(val => {
     // Normalize the type values
-    if (val === 'Doubles') return 'DOUBLES';
-    if (val === 'Singles') return 'LOCAL';
-    return val;
+    if (val === 'Doubles' || val === 'DOUBLES') return 'DOUBLES';
+    // All other types become SINGLES
+    return 'SINGLES';
   }),
   origin: z.string(),
   destination: z.string(),
@@ -17,10 +17,10 @@ const routeImportSchema = z.object({
   startTime: z.string(),
   endTime: z.string(),
   distance: z.number(),
-  rateType: z.enum(['HOURLY', 'MILEAGE', 'SALARY', 'Miles', 'Flat Rate']).transform(val => {
+  rateType: z.enum(['HOURLY', 'MILEAGE', 'FLAT_RATE', 'SALARY', 'Miles', 'Flat Rate']).transform(val => {
     // Normalize the rate type values
     if (val === 'Miles') return 'MILEAGE';
-    if (val === 'Flat Rate') return 'SALARY';
+    if (val === 'Flat Rate' || val === 'SALARY') return 'FLAT_RATE';
     return val;
   }),
   workTime: z.number(),
@@ -207,8 +207,8 @@ export class FileProcessor {
           origin: String(normalizedRow.origin || ''),
           destination: String(normalizedRow.destination || ''),
           days: String(normalizedRow.days || ''),
-          startTime: String(normalizedRow.startTime || ''),
-          endTime: String(normalizedRow.endTime || ''),
+          startTime: this.convertTo24Hour(String(normalizedRow.startTime || '')),
+          endTime: this.convertTo24Hour(String(normalizedRow.endTime || '')),
           distance: normalizedRow.distance !== undefined && normalizedRow.distance !== '' 
             ? this.parseNumber(normalizedRow.distance, `Row ${index + 1}: distance`) 
             : 0,
@@ -480,6 +480,35 @@ export class FileProcessor {
       return value !== 0;
     }
     return false;
+  }
+
+  private static convertTo24Hour(time: string): string {
+    if (!time) return '';
+    
+    // If already in 24-hour format, return as-is
+    if (/^\d{2}:\d{2}$/.test(time)) return time;
+    
+    // Handle 12-hour format (e.g., "1:45 PM", "12:30 AM")
+    const match = time.match(/^(\d{1,2}):(\d{2})\s*(AM|PM)$/i);
+    if (match) {
+      let hours = parseInt(match[1]);
+      const minutes = match[2];
+      const period = match[3].toUpperCase();
+      
+      // Convert to 24-hour format
+      if (period === 'PM' && hours !== 12) {
+        hours += 12;
+      } else if (period === 'AM' && hours === 12) {
+        hours = 0;
+      }
+      
+      // Pad hours with zero if needed
+      const formattedHours = hours.toString().padStart(2, '0');
+      return `${formattedHours}:${minutes}`;
+    }
+    
+    // If no match, return original
+    return time;
   }
 
   private static calculateColumnWidths(data: any[]): any[] {

@@ -158,6 +158,6 @@ model AuditLog {
 
 // Enums are replaced with string constants for SQLite compatibility
 // Role: "ADMIN" | "DRIVER"
-// RouteType: "LOCAL" | "REGIONAL" | "LONG_HAUL" | "DEDICATED" | "DOUBLES"
-// RateType: "HOURLY" | "MILEAGE" | "SALARY"
+// RouteType: "SINGLES" | "DOUBLES"
+// RateType: "HOURLY" | "MILEAGE" | "FLAT_RATE"
 // SelectionPeriodStatus: "UPCOMING" | "OPEN" | "CLOSED" | "PROCESSING" | "COMPLETED"

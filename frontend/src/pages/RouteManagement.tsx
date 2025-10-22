@@ -40,14 +40,14 @@ interface Route {
 
 interface RouteFormData {
   runNumber: string;
-  type: 'LOCAL' | 'REGIONAL' | 'LONG_HAUL' | 'DEDICATED' | 'DOUBLES';
+  type: 'SINGLES' | 'DOUBLES';
   origin: string;
   destination: string;
   days: string;
   startTime: string;
   endTime: string;
   distance: number;
-  rateType: 'HOURLY' | 'MILEAGE' | 'SALARY';
+  rateType: 'HOURLY' | 'MILEAGE' | 'FLAT_RATE';
   workTime: number;
   requiresDoublesEndorsement: boolean;
   requiresChainExperience: boolean;
@@ -65,7 +65,7 @@ const RouteManagement = () => {
   const [statusFilter, setStatusFilter] = useState<'all' | 'active' | 'inactive'>('all');
   const [formData, setFormData] = useState<RouteFormData>({
     runNumber: '',
-    type: 'LOCAL',
+    type: 'SINGLES',
     origin: '',
     destination: '',
     days: '',
@@ -103,7 +103,7 @@ const RouteManagement = () => {
   // Toggle route status mutation
   const toggleStatusMutation = useMutation({
     mutationFn: async ({ routeId, isActive }: { routeId: string; isActive: boolean }) => {
-      await apiClient.patch(`/routes/${routeId}`, { isActive });
+      await apiClient.put(`/routes/${routeId}`, { isActive });
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['routes'] });
@@ -150,6 +150,22 @@ const RouteManagement = () => {
       (statusFilter === 'inactive' && !route.isActive);
 
     return matchesSearch && matchesStatus;
+  }).sort((a, b) => {
+    // Extract numeric part from route numbers for proper numeric sorting
+    const getNumericValue = (runNumber: string) => {
+      const match = runNumber.match(/\d+/);
+      return match ? parseInt(match[0]) : 0;
+    };
+    
+    const numA = getNumericValue(a.runNumber);
+    const numB = getNumericValue(b.runNumber);
+    
+    // If numeric parts are equal, fall back to string comparison
+    if (numA === numB) {
+      return a.runNumber.localeCompare(b.runNumber);
+    }
+    
+    return numA - numB;
   }) || [];
 
   const handleDelete = (route: Route) => {
@@ -170,7 +186,7 @@ const RouteManagement = () => {
   const resetForm = () => {
     setFormData({
       runNumber: '',
-      type: 'LOCAL',
+      type: 'SINGLES',
       origin: '',
       destination: '',
       days: '',
@@ -187,16 +203,66 @@ const RouteManagement = () => {
 
   const handleEdit = (route: Route) => {
     setSelectedRoute(route);
+    
+    // Ensure time format is HH:MM for HTML time inputs
+    const formatTime = (time: string) => {
+      if (!time) return '';
+      
+      // Remove any whitespace
+      time = time.trim();
+      
+      // If time is already in HH:MM format, return it
+      if (/^\d{2}:\d{2}$/.test(time)) return time;
+      
+      // If time is in H:MM format, pad with zero
+      if (/^\d{1}:\d{2}$/.test(time)) return '0' + time;
+      
+      // Handle 12-hour format (e.g., "1:45 PM", "12:30 AM")
+      const twelveHourMatch = time.match(/^(\d{1,2}):(\d{2})\s*(AM|PM)$/i);
+      if (twelveHourMatch) {
+        let hours = parseInt(twelveHourMatch[1]);
+        const minutes = twelveHourMatch[2];
+        const period = twelveHourMatch[3].toUpperCase();
+        
+        // Convert to 24-hour format
+        if (period === 'PM' && hours !== 12) {
+          hours += 12;
+        } else if (period === 'AM' && hours === 12) {
+          hours = 0;
+        }
+        
+        // Pad hours with zero if needed
+        const formattedHours = hours.toString().padStart(2, '0');
+        return `${formattedHours}:${minutes}`;
+      }
+      
+      // Otherwise return as is
+      return time;
+    };
+    
+    // Map old types to new types
+    const mapRouteType = (type: string): RouteFormData['type'] => {
+      if (type === 'DOUBLES') return 'DOUBLES';
+      return 'SINGLES'; // Default all other types to SINGLES
+    };
+    
+    const mapRateType = (rateType: string): RouteFormData['rateType'] => {
+      if (rateType === 'HOURLY') return 'HOURLY';
+      if (rateType === 'MILEAGE') return 'MILEAGE';
+      if (rateType === 'SALARY' || rateType === 'FLAT_RATE') return 'FLAT_RATE';
+      return 'HOURLY'; // Default
+    };
+    
     setFormData({
       runNumber: route.runNumber,
-      type: route.type as RouteFormData['type'],
+      type: mapRouteType(route.type),
       origin: route.origin,
       destination: route.destination,
       days: route.days,
-      startTime: route.startTime,
-      endTime: route.endTime,
+      startTime: formatTime(route.startTime),
+      endTime: formatTime(route.endTime),
       distance: route.distance,
-      rateType: route.rateType as RouteFormData['rateType'],
+      rateType: mapRateType(route.rateType),
       workTime: route.workTime,
       requiresDoublesEndorsement: route.requiresDoublesEndorsement,
       requiresChainExperience: route.requiresChainExperience,
@@ -213,7 +279,12 @@ const RouteManagement = () => {
   const handleSubmitEdit = (e: React.FormEvent) => {
     e.preventDefault();
     if (selectedRoute) {
-      updateRouteMutation.mutate({ id: selectedRoute.id, data: formData });
+      // Ensure work time has a valid value
+      const dataToSubmit = {
+        ...formData,
+        workTime: formData.workTime || 0
+      };
+      updateRouteMutation.mutate({ id: selectedRoute.id, data: dataToSubmit });
     }
   };
 
@@ -431,7 +502,12 @@ const RouteManagement = () => {
                     <td className="py-4 px-6">
                       <div className="flex items-center gap-2">
                         <button
-                          onClick={() => toggleRouteStatus(route)}
+                          type="button"
+                          onClick={(e) => {
+                            e.preventDefault();
+                            e.stopPropagation();
+                            toggleRouteStatus(route);
+                          }}
                           disabled={toggleStatusMutation.isPending}
                           className={`py-1 px-3 rounded text-xs font-medium transition-all ${
                             route.isActive
@@ -442,6 +518,7 @@ const RouteManagement = () => {
                           {route.isActive ? 'Deactivate' : 'Activate'}
                         </button>
                         <button
+                          type="button"
                           onClick={() => handleEdit(route)}
                           className="p-1.5 text-gray-500 hover:text-primary-600 hover:bg-primary-50 rounded transition-all"
                           title="Edit route"
@@ -449,6 +526,7 @@ const RouteManagement = () => {
                           <Edit className="w-3 h-3" />
                         </button>
                         <button
+                          type="button"
                           onClick={() => handleDelete(route)}
                           className="p-1.5 text-gray-500 hover:text-red-600 hover:bg-red-50 rounded transition-all"
                           title="Delete route"
@@ -536,7 +614,7 @@ const RouteManagement = () => {
               </button>
             </div>
 
-            <form onSubmit={handleSubmitAdd} className="space-y-4">
+            <form onSubmit={handleSubmitAdd} className="space-y-4" noValidate>
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 <div>
                   <label className="block text-sm font-medium text-gray-700 mb-1">Run Number</label>
@@ -556,10 +634,7 @@ const RouteManagement = () => {
                     className="input-field"
                     required
                   >
-                    <option value="LOCAL">Local</option>
-                    <option value="REGIONAL">Regional</option>
-                    <option value="LONG_HAUL">Long Haul</option>
-                    <option value="DEDICATED">Dedicated</option>
+                    <option value="SINGLES">Singles</option>
                     <option value="DOUBLES">Doubles</option>
                   </select>
                 </div>
@@ -636,7 +711,7 @@ const RouteManagement = () => {
                   >
                     <option value="HOURLY">Hourly</option>
                     <option value="MILEAGE">Mileage</option>
-                    <option value="SALARY">Salary</option>
+                    <option value="FLAT_RATE">Flat Rate</option>
                   </select>
                 </div>
                 <div>
@@ -648,7 +723,6 @@ const RouteManagement = () => {
                     className="input-field"
                     min="0"
                     step="0.5"
-                    required
                   />
                 </div>
               </div>
@@ -726,7 +800,7 @@ const RouteManagement = () => {
               </button>
             </div>
 
-            <form onSubmit={handleSubmitEdit} className="space-y-4">
+            <form onSubmit={handleSubmitEdit} className="space-y-4" noValidate>
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 <div>
                   <label className="block text-sm font-medium text-gray-700 mb-1">Run Number</label>
@@ -746,10 +820,7 @@ const RouteManagement = () => {
                     className="input-field"
                     required
                   >
-                    <option value="LOCAL">Local</option>
-                    <option value="REGIONAL">Regional</option>
-                    <option value="LONG_HAUL">Long Haul</option>
-                    <option value="DEDICATED">Dedicated</option>
+                    <option value="SINGLES">Singles</option>
                     <option value="DOUBLES">Doubles</option>
                   </select>
                 </div>
@@ -826,7 +897,7 @@ const RouteManagement = () => {
                   >
                     <option value="HOURLY">Hourly</option>
                     <option value="MILEAGE">Mileage</option>
-                    <option value="SALARY">Salary</option>
+                    <option value="FLAT_RATE">Flat Rate</option>
                   </select>
                 </div>
                 <div>
@@ -838,7 +909,6 @@ const RouteManagement = () => {
                     className="input-field"
                     min="0"
                     step="0.5"
-                    required
                   />
                 </div>
               </div>

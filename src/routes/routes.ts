@@ -8,14 +8,14 @@ const router = Router();
 
 const createRouteSchema = z.object({
   runNumber: z.string(),
-  type: z.enum(['LOCAL', 'REGIONAL', 'LONG_HAUL', 'DEDICATED', 'DOUBLES']),
+  type: z.enum(['SINGLES', 'DOUBLES']),
   origin: z.string(),
   destination: z.string(),
   days: z.string(),
   startTime: z.string(),
   endTime: z.string(),
   distance: z.number(),
-  rateType: z.enum(['HOURLY', 'MILEAGE', 'SALARY']),
+  rateType: z.enum(['HOURLY', 'MILEAGE', 'FLAT_RATE']),
   workTime: z.number(),
   requiresDoublesEndorsement: z.boolean().default(false),
   requiresChainExperience: z.boolean().default(false),
@@ -32,12 +32,12 @@ router.get('/', authenticateToken, async (req: Request, res: Response) => {
       requiresDoublesEndorsement,
       requiresChainExperience,
       searchTerm,
-      isActive = 'true',
+      isActive,
     } = req.query;
 
     const where: any = {};
 
-    if (isActive) {
+    if (isActive !== undefined) {
       where.isActive = isActive === 'true';
     }
 
@@ -174,14 +174,14 @@ router.post('/', authenticateToken, requireAdmin, async (req: Request, res: Resp
     if (data.type === 'Doubles') {
       data.type = 'DOUBLES';
     } else if (data.type === 'Singles') {
-      data.type = 'LOCAL';
+      data.type = 'SINGLES';
     }
 
     // Normalize rate types from import
     if (data.rateType === 'Miles') {
       data.rateType = 'MILEAGE';
-    } else if (data.rateType === 'Flat Rate') {
-      data.rateType = 'SALARY';
+    } else if (data.rateType === 'Salary') {
+      data.rateType = 'FLAT_RATE';
     }
 
     // Automatically set requiresDoublesEndorsement for doubles routes
@@ -232,14 +232,14 @@ router.put('/:id', authenticateToken, requireAdmin, async (req: Request, res: Re
     if (data.type === 'Doubles') {
       data.type = 'DOUBLES';
     } else if (data.type === 'Singles') {
-      data.type = 'LOCAL';
+      data.type = 'SINGLES';
     }
 
     // Normalize rate types from import
     if (data.rateType === 'Miles') {
       data.rateType = 'MILEAGE';
-    } else if (data.rateType === 'Flat Rate') {
-      data.rateType = 'SALARY';
+    } else if (data.rateType === 'Salary') {
+      data.rateType = 'FLAT_RATE';
     }
 
     // Automatically set requiresDoublesEndorsement for doubles routes
