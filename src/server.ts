@@ -15,6 +15,7 @@ import periodRoutes from './routes/periods.js';
 import assignmentRoutes from './routes/assignments.js';
 import importRoutes from './routes/import.js';
 import exportRoutes from './routes/export.js';
+import passwordResetRoutes from './routes/passwordReset.js';
 
 const app = express();
 const PORT = process.env.PORT || 3001;
@@ -50,6 +51,7 @@ app.use('/api/periods', periodRoutes);
 app.use('/api/assignments', assignmentRoutes);
 app.use('/api/import', importRoutes);
 app.use('/api/export', exportRoutes);
+app.use('/api/password-reset', passwordResetRoutes);
 
 // Error handling middleware
 app.use((err: Error, req: express.Request, res: express.Response, next: express.NextFunction) => {

@@ -126,6 +126,16 @@ class EmailService {
             
             <a href="${process.env.APP_URL || 'http://localhost:3001'}/login" class="button">Go to Driver Portal</a>
             
+            <h3>Login Information:</h3>
+            <p><strong>Username:</strong> Your email address (${recipientEmail})<br>
+            <strong>Password:</strong> driver123</p>
+            
+            <p style="background-color: #f8f9fa; padding: 15px; border-radius: 5px; margin: 20px 0;">
+              <strong>First Time Login?</strong> For security reasons, we recommend that you 
+              <a href="${process.env.APP_URL || 'http://localhost:3001'}/forgot-password" style="color: #7c3aed; text-decoration: underline;">reset your password</a> 
+              after your first login.
+            </p>
+            
             <p>If you have any questions, please contact your supervisor.</p>
             
             <p>Thank you,<br>Route Selection Team</p>
@@ -156,6 +166,13 @@ How to Submit Your Selection:
 5. Submit your selections before the deadline
 
 Routes will be assigned based on seniority and your preferences. You will be notified of your assignment once the selection period closes.
+
+Login Information:
+- Username: Your email address (${recipientEmail})
+- Password: driver123
+
+First Time Login? For security reasons, we recommend that you reset your password after your first login.
+To reset your password, visit: ${process.env.APP_URL || 'http://localhost:3001'}/forgot-password
 
 If you have any questions, please contact your supervisor.
 
@@ -271,6 +288,89 @@ This is an automated message. Please do not reply to this email.
     const s = ['th', 'st', 'nd', 'rd'];
     const v = n % 100;
     return n + (s[(v - 20) % 10] || s[v] || s[0]);
+  }
+
+  async sendPasswordResetEmail(
+    recipientEmail: string,
+    recipientName: string,
+    resetUrl: string
+  ): Promise<void> {
+    const subject = 'Password Reset Request - Route Selection System';
+    
+    const html = `
+      <!DOCTYPE html>
+      <html>
+      <head>
+        <style>
+          body { font-family: Arial, sans-serif; line-height: 1.6; color: #333; }
+          .container { max-width: 600px; margin: 0 auto; padding: 20px; }
+          .header { background-color: #7c3aed; color: white; padding: 20px; text-align: center; }
+          .content { background-color: #f9f9f9; padding: 20px; }
+          .button { background-color: #7c3aed; color: white; padding: 12px 30px; text-decoration: none; border-radius: 5px; display: inline-block; margin: 20px 0; }
+          .footer { text-align: center; padding: 20px; color: #666; font-size: 12px; }
+          .warning { background-color: #fff3cd; border: 1px solid #ffeaa7; padding: 15px; border-radius: 5px; margin: 20px 0; }
+        </style>
+      </head>
+      <body>
+        <div class="container">
+          <div class="header">
+            <h1>Password Reset Request</h1>
+          </div>
+          <div class="content">
+            <p>Dear ${recipientName},</p>
+            
+            <p>We received a request to reset your password for the Route Selection System. If you didn't make this request, you can safely ignore this email.</p>
+            
+            <p>To reset your password, click the button below:</p>
+            
+            <div style="text-align: center;">
+              <a href="${resetUrl}" class="button">Reset Password</a>
+            </div>
+            
+            <p>Or copy and paste this link into your browser:</p>
+            <p style="word-break: break-all; color: #7c3aed;">${resetUrl}</p>
+            
+            <div class="warning">
+              <strong>Important:</strong> This link will expire in 1 hour for security reasons. If you need to reset your password after this time, please request a new reset link.
+            </div>
+            
+            <p>If you didn't request a password reset, please ignore this email or contact your system administrator if you have concerns.</p>
+            
+            <p>Thank you,<br>Route Selection Team</p>
+          </div>
+          <div class="footer">
+            <p>This is an automated message. Please do not reply to this email.</p>
+            <p>&copy; 2024 Route Selection System. All rights reserved.</p>
+          </div>
+        </div>
+      </body>
+      </html>
+    `;
+
+    const text = `
+Dear ${recipientName},
+
+We received a request to reset your password for the Route Selection System. If you didn't make this request, you can safely ignore this email.
+
+To reset your password, please visit:
+${resetUrl}
+
+Important: This link will expire in 1 hour for security reasons. If you need to reset your password after this time, please request a new reset link.
+
+If you didn't request a password reset, please ignore this email or contact your system administrator if you have concerns.
+
+Thank you,
+Route Selection Team
+
+This is an automated message. Please do not reply to this email.
+`;
+
+    await this.sendEmail({
+      to: recipientEmail,
+      subject,
+      text,
+      html,
+    });
   }
 }
 

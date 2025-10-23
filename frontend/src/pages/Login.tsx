@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, Link } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
 import { LogIn, AlertCircle, Truck, Shield, Users } from 'lucide-react';
 
@@ -90,6 +90,15 @@ const Login = () => {
                 className="input-field"
                 placeholder="Enter your password"
               />
+            </div>
+            
+            <div className="flex justify-end">
+              <Link
+                to="/forgot-password"
+                className="text-sm text-primary-600 hover:text-primary-700"
+              >
+                Forgot your password?
+              </Link>
             </div>
 
             <button
