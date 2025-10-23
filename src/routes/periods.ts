@@ -2,6 +2,7 @@ import { Router, Request, Response } from 'express';
 import { z } from 'zod';
 import prisma from '../utils/database.js';
 import { authenticateToken, requireAdmin } from '../middleware/auth.js';
+import emailService from '../services/email.js';
 
 const router = Router();
 
@@ -549,16 +550,34 @@ router.post('/:id/notify', authenticateToken, requireAdmin, async (req: Request,
       return res.status(400).json({ error: 'No eligible employees found to notify' });
     }
 
-    // In a production environment, this would integrate with an email service
-    // For now, we'll log the notification and return success
-    const notifications = eligibleEmployees.map(employee => ({
-      employeeId: employee.id,
-      email: employee.user?.email,
-      subject: `Route Selection Period Now Open: ${period.name}`,
-      periodName: period.name,
-      startDate: period.startDate,
-      endDate: period.endDate,
-    }));
+    // Send email notifications to all eligible employees
+    let successCount = 0;
+    let failureCount = 0;
+    const emailPromises = [];
+
+    for (const employee of eligibleEmployees) {
+      if (employee.user?.email) {
+        const emailPromise = emailService.sendSelectionPeriodNotification(
+          employee.user.email,
+          `${employee.firstName} ${employee.lastName}`,
+          {
+            name: period.name,
+            startDate: period.startDate,
+            endDate: period.endDate,
+          }
+        ).then(() => {
+          successCount++;
+        }).catch((error) => {
+          console.error(`Failed to send email to ${employee.user?.email}:`, error);
+          failureCount++;
+        });
+        
+        emailPromises.push(emailPromise);
+      }
+    }
+
+    // Wait for all emails to be sent
+    await Promise.all(emailPromises);
 
     // Log the notification attempt
     await prisma.auditLog.create({
@@ -566,16 +585,17 @@ router.post('/:id/notify', authenticateToken, requireAdmin, async (req: Request,
         userId: req.user!.id,
         action: 'SEND_PERIOD_NOTIFICATION',
         resource: 'SelectionPeriod',
-        details: `Sent notifications to ${eligibleEmployees.length} eligible drivers for period: ${period.name}`,
+        details: `Sent notifications to ${successCount} eligible drivers for period: ${period.name}. Failed: ${failureCount}`,
       },
     });
 
-    // TODO: Integrate with actual email service (SendGrid, AWS SES, etc.)
-    console.log(`Sending notifications to ${eligibleEmployees.length} drivers for period: ${period.name}`);
+    console.log(`Email notifications sent: ${successCount} successful, ${failureCount} failed`);
 
     res.json({
       success: true,
-      notificationsSent: eligibleEmployees.length,
+      notificationsSent: successCount,
+      notificationsFailed: failureCount,
+      totalEligible: eligibleEmployees.length,
       period: {
         id: period.id,
         name: period.name,

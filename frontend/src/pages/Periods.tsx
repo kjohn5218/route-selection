@@ -148,7 +148,8 @@ const Periods = () => {
       setShowNotifyModal(false);
       setSelectedPeriod(null);
       // Show success message
-      alert(`Successfully sent notifications to ${data.notificationsSent} eligible drivers.`);
+      const failedText = data.notificationsFailed > 0 ? ` (${data.notificationsFailed} failed)` : '';
+      alert(`Successfully sent notifications to ${data.notificationsSent} eligible drivers${failedText}.`);
     },
     onError: (error: any) => {
       const message = error.response?.data?.error || 'Failed to send notifications';
@@ -656,7 +657,7 @@ const Periods = () => {
                   {allRoutes.length === 0 ? (
                     <p className="text-sm text-gray-500">No active routes available</p>
                   ) : (
-                    allRoutes.map(route => (
+                    [...allRoutes].sort((a, b) => parseInt(a.runNumber) - parseInt(b.runNumber)).map(route => (
                       <label key={route.id} className="flex items-center gap-2 cursor-pointer hover:bg-gray-50 p-1 rounded">
                         <input
                           type="checkbox"
@@ -771,7 +772,7 @@ const Periods = () => {
                   {allRoutes.length === 0 ? (
                     <p className="text-sm text-gray-500">No active routes available</p>
                   ) : (
-                    allRoutes.map(route => (
+                    [...allRoutes].sort((a, b) => parseInt(a.runNumber) - parseInt(b.runNumber)).map(route => (
                       <label key={route.id} className="flex items-center gap-2 cursor-pointer hover:bg-gray-50 p-1 rounded">
                         <input
                           type="checkbox"

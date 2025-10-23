@@ -2,6 +2,7 @@ import { Router, Request, Response } from 'express';
 import prisma from '../utils/database.js';
 import { authenticateToken, requireAdmin } from '../middleware/auth.js';
 import { AssignmentEngine } from '../services/assignmentEngine.js';
+import emailService from '../services/email.js';
 
 const router = Router();
 
@@ -523,22 +524,36 @@ router.post('/notify/:periodId', authenticateToken, requireAdmin, async (req: Re
       },
     });
 
-    const notificationsToSend = assignments.filter(a => a.employee.user?.email).map(assignment => {
-      const isFloatPool = !assignment.route;
-      const routeDetails = assignment.route ? 
-        `Route ${assignment.route.runNumber} (${assignment.route.origin} → ${assignment.route.destination})` :
-        'Float Pool';
-      
-      return {
-        employeeId: assignment.employee.id,
-        email: assignment.employee.user!.email,
-        employeeName: `${assignment.employee.firstName} ${assignment.employee.lastName}`,
-        assignment: routeDetails,
-        choiceReceived: assignment.choiceReceived,
-        effectiveDate: assignment.effectiveDate,
-        isFloatPool,
-      };
-    });
+    // Send email notifications
+    let successCount = 0;
+    let failureCount = 0;
+    const emailPromises = [];
+
+    for (const assignment of assignments) {
+      if (assignment.employee.user?.email) {
+        const emailPromise = emailService.sendAssignmentNotification(
+          assignment.employee.user.email,
+          `${assignment.employee.firstName} ${assignment.employee.lastName}`,
+          {
+            routeNumber: assignment.route?.runNumber || 'Float Pool',
+            origin: assignment.route?.origin || 'Various',
+            destination: assignment.route?.destination || 'Various',
+            choiceReceived: assignment.choiceReceived,
+            periodName: period.name,
+          }
+        ).then(() => {
+          successCount++;
+        }).catch((error) => {
+          console.error(`Failed to send email to ${assignment.employee.user?.email}:`, error);
+          failureCount++;
+        });
+        
+        emailPromises.push(emailPromise);
+      }
+    }
+
+    // Wait for all emails to be sent
+    await Promise.all(emailPromises);
 
     // Log the notification attempt
     await prisma.auditLog.create({
@@ -546,16 +561,16 @@ router.post('/notify/:periodId', authenticateToken, requireAdmin, async (req: Re
         userId: req.user!.id,
         action: 'SEND_ASSIGNMENT_NOTIFICATIONS',
         resource: 'Assignment',
-        details: `Sent assignment notifications to ${notificationsToSend.length} employees for period: ${period.name}`,
+        details: `Sent assignment notifications to ${successCount} employees for period: ${period.name}. Failed: ${failureCount}`,
       },
     });
 
-    // TODO: Integrate with actual email service
-    console.log(`Sending assignment notifications to ${notificationsToSend.length} employees`);
+    console.log(`Assignment notifications sent: ${successCount} successful, ${failureCount} failed`);
 
     res.json({
       success: true,
-      notificationsSent: notificationsToSend.length,
+      notificationsSent: successCount,
+      notificationsFailed: failureCount,
       totalAssignments: assignments.length,
       period: {
         id: period.id,
