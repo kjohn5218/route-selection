@@ -1,6 +1,3 @@
-// This is your Prisma schema file,
-// learn more about it in the docs: https://pris.ly/d/prisma-schema
-
 generator client {
   provider = "prisma-client-js"
 }
@@ -11,139 +8,131 @@ datasource db {
 }
 
 model User {
-  id        String   @id @default(cuid())
-  email     String   @unique
+  id        String    @id @default(cuid())
+  email     String    @unique
   password  String
-  role      String   @default("DRIVER") // ADMIN or DRIVER
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
-
-  employee Employee?
+  role      String    @default("DRIVER")
+  createdAt DateTime  @default(now())
+  updatedAt DateTime  @updatedAt
+  employee  Employee?
 
   @@map("users")
 }
 
 model Employee {
-  id                 String   @id @default(cuid())
-  employeeId         String   @unique
+  id                 String             @id @default(cuid())
+  employeeId         String             @unique
   firstName          String
   lastName           String
-  email              String   @unique
+  email              String             @unique
   phone              String?
   hireDate           DateTime
-  doublesEndorsement Boolean  @default(false)
-  chainExperience    Boolean  @default(false)
-  isEligible         Boolean  @default(true)
+  doublesEndorsement Boolean            @default(false)
+  chainExperience    Boolean            @default(false)
+  isEligible         Boolean            @default(true)
   currentRouteId     String?
-  createdAt          DateTime @default(now())
-  updatedAt          DateTime @updatedAt
-
-  user   User   @relation(fields: [email], references: [email])
-  route  Route? @relation("CurrentAssignment", fields: [currentRouteId], references: [id])
-
-  selections    Selection[]
-  assignments   Assignment[]
-  disqualifications Disqualification[]
+  createdAt          DateTime           @default(now())
+  updatedAt          DateTime           @updatedAt
+  assignments        Assignment[]
+  disqualifications  Disqualification[]
+  route              Route?             @relation("CurrentAssignment", fields: [currentRouteId], references: [id])
+  user               User               @relation(fields: [email], references: [email])
+  selections         Selection[]
 
   @@map("employees")
 }
 
 model Route {
-  id          String    @id @default(cuid())
-  runNumber   String    @unique
-  type        String    // LOCAL, REGIONAL, LONG_HAUL, DEDICATED
-  origin      String
-  destination String
-  days        String
-  startTime   String
-  endTime     String
-  distance    Float
-  rateType    String    // HOURLY, MILEAGE, SALARY
-  workTime    Float
-  requiresDoublesEndorsement Boolean @default(false)
-  requiresChainExperience    Boolean @default(false)
-  isActive    Boolean   @default(true)
-  createdAt   DateTime  @default(now())
-  updatedAt   DateTime  @updatedAt
-
-  currentEmployees Employee[] @relation("CurrentAssignment")
-  firstChoiceSelections  Selection[] @relation("FirstChoice")
-  secondChoiceSelections Selection[] @relation("SecondChoice")
-  thirdChoiceSelections  Selection[] @relation("ThirdChoice")
-  assignments      Assignment[]
-  periodRoutes     PeriodRoute[]
+  id                         String        @id @default(cuid())
+  runNumber                  String        @unique
+  type                       String
+  origin                     String
+  destination                String
+  days                       String
+  startTime                  String
+  endTime                    String
+  distance                   Float
+  rateType                   String
+  workTime                   Float
+  requiresDoublesEndorsement Boolean       @default(false)
+  requiresChainExperience    Boolean       @default(false)
+  isActive                   Boolean       @default(true)
+  createdAt                  DateTime      @default(now())
+  updatedAt                  DateTime      @updatedAt
+  assignments                Assignment[]
+  currentEmployees           Employee[]    @relation("CurrentAssignment")
+  periodRoutes               PeriodRoute[]
+  thirdChoiceSelections      Selection[]   @relation("ThirdChoice")
+  secondChoiceSelections     Selection[]   @relation("SecondChoice")
+  firstChoiceSelections      Selection[]   @relation("FirstChoice")
 
   @@map("routes")
 }
 
 model SelectionPeriod {
-  id          String              @id @default(cuid())
+  id          String        @id @default(cuid())
   name        String
   description String?
   startDate   DateTime
   endDate     DateTime
-  status      String              @default("UPCOMING") // UPCOMING, OPEN, CLOSED, PROCESSING, COMPLETED
-  createdAt   DateTime            @default(now())
-  updatedAt   DateTime            @updatedAt
-
-  selections  Selection[]
+  status      String        @default("UPCOMING")
+  createdAt   DateTime      @default(now())
+  updatedAt   DateTime      @updatedAt
   assignments Assignment[]
   routes      PeriodRoute[]
+  selections  Selection[]
 
   @@map("selection_periods")
 }
 
 model Selection {
-  id                 String   @id @default(cuid())
+  id                 String          @id @default(cuid())
   employeeId         String
   selectionPeriodId  String
   firstChoiceId      String?
   secondChoiceId     String?
   thirdChoiceId      String?
-  submittedAt        DateTime @default(now())
-  confirmationNumber String   @unique
-  createdAt          DateTime @default(now())
-  updatedAt          DateTime @updatedAt
-
-  employee        Employee        @relation(fields: [employeeId], references: [id])
-  selectionPeriod SelectionPeriod @relation(fields: [selectionPeriodId], references: [id])
-  firstChoice     Route?          @relation("FirstChoice", fields: [firstChoiceId], references: [id])
-  secondChoice    Route?          @relation("SecondChoice", fields: [secondChoiceId], references: [id])
-  thirdChoice     Route?          @relation("ThirdChoice", fields: [thirdChoiceId], references: [id])
+  submittedAt        DateTime        @default(now())
+  confirmationNumber String          @unique
+  createdAt          DateTime        @default(now())
+  updatedAt          DateTime        @updatedAt
+  thirdChoice        Route?          @relation("ThirdChoice", fields: [thirdChoiceId], references: [id])
+  secondChoice       Route?          @relation("SecondChoice", fields: [secondChoiceId], references: [id])
+  firstChoice        Route?          @relation("FirstChoice", fields: [firstChoiceId], references: [id])
+  selectionPeriod    SelectionPeriod @relation(fields: [selectionPeriodId], references: [id])
+  employee           Employee        @relation(fields: [employeeId], references: [id])
 
   @@unique([employeeId, selectionPeriodId])
   @@map("selections")
 }
 
 model Assignment {
-  id                String   @id @default(cuid())
+  id                String          @id @default(cuid())
   employeeId        String
   selectionPeriodId String
   routeId           String?
-  choiceReceived    Int?     // 1, 2, or 3 for which choice was awarded, null for float pool
+  choiceReceived    Int?
   effectiveDate     DateTime
-  createdAt         DateTime @default(now())
-  updatedAt         DateTime @updatedAt
-
-  employee        Employee        @relation(fields: [employeeId], references: [id])
-  selectionPeriod SelectionPeriod @relation(fields: [selectionPeriodId], references: [id])
-  route           Route?          @relation(fields: [routeId], references: [id])
+  createdAt         DateTime        @default(now())
+  updatedAt         DateTime        @updatedAt
+  route             Route?          @relation(fields: [routeId], references: [id])
+  selectionPeriod   SelectionPeriod @relation(fields: [selectionPeriodId], references: [id])
+  employee          Employee        @relation(fields: [employeeId], references: [id])
 
   @@unique([employeeId, selectionPeriodId])
   @@map("assignments")
 }
 
 model Disqualification {
-  id         String   @id @default(cuid())
+  id         String    @id @default(cuid())
   employeeId String
   reason     String
   startDate  DateTime
   endDate    DateTime?
-  isActive   Boolean  @default(true)
-  createdAt  DateTime @default(now())
-  updatedAt  DateTime @updatedAt
-
-  employee Employee @relation(fields: [employeeId], references: [id])
+  isActive   Boolean   @default(true)
+  createdAt  DateTime  @default(now())
+  updatedAt  DateTime  @updatedAt
+  employee   Employee  @relation(fields: [employeeId], references: [id])
 
   @@map("disqualifications")
 }
@@ -162,17 +151,10 @@ model AuditLog {
 model PeriodRoute {
   selectionPeriodId String
   routeId           String
-  createdAt         DateTime @default(now())
-
-  selectionPeriod SelectionPeriod @relation(fields: [selectionPeriodId], references: [id], onDelete: Cascade)
-  route           Route           @relation(fields: [routeId], references: [id], onDelete: Cascade)
+  createdAt         DateTime        @default(now())
+  route             Route           @relation(fields: [routeId], references: [id], onDelete: Cascade)
+  selectionPeriod   SelectionPeriod @relation(fields: [selectionPeriodId], references: [id], onDelete: Cascade)
 
   @@id([selectionPeriodId, routeId])
   @@map("period_routes")
 }
-
-// Enums are replaced with string constants for SQLite compatibility
-// Role: "ADMIN" | "DRIVER"
-// RouteType: "SINGLES" | "DOUBLES"
-// RateType: "HOURLY" | "MILEAGE" | "FLAT_RATE"
-// SelectionPeriodStatus: "UPCOMING" | "OPEN" | "CLOSED" | "PROCESSING" | "COMPLETED"
