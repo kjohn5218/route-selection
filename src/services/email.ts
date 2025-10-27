@@ -15,11 +15,16 @@ class EmailService {
   constructor() {
     // Create transporter with Gmail configuration
     this.transporter = nodemailer.createTransport({
-      service: 'gmail',
+      host: 'smtp.gmail.com',
+      port: 587,
+      secure: false, // true for 465, false for other ports
       auth: {
         user: process.env.EMAIL_USER,
         pass: process.env.EMAIL_APP_PASSWORD,
       },
+      tls: {
+        rejectUnauthorized: false
+      }
     });
 
     // Set up email override if configured
@@ -31,10 +36,17 @@ class EmailService {
 
   private async verifyConnection() {
     try {
-      await this.transporter.verify();
-      console.log('Email service ready');
+      // Don't verify connection on startup - verify when sending
+      console.log('Email service initialized');
+      console.log('Email configuration:', {
+        user: process.env.EMAIL_USER,
+        hasPassword: !!process.env.EMAIL_APP_PASSWORD,
+        passwordLength: process.env.EMAIL_APP_PASSWORD?.length,
+        override: this.emailOverride || 'None'
+      });
     } catch (error) {
       console.error('Email service error:', error);
+      console.error('Make sure EMAIL_USER and EMAIL_APP_PASSWORD are set correctly');
     }
   }
 
@@ -52,21 +64,38 @@ class EmailService {
         html: options.html,
       };
 
-      // Log email details in development
-      if (process.env.NODE_ENV !== 'production') {
-        console.log('Sending email:', {
-          originalTo: options.to,
-          actualTo: mailOptions.to,
-          subject: options.subject,
-          override: this.emailOverride ? 'ACTIVE' : 'NONE',
+      // Log email details
+      console.log('Email request:', {
+        originalTo: options.to,
+        actualTo: mailOptions.to,
+        subject: options.subject,
+        override: this.emailOverride ? 'ACTIVE' : 'NONE',
+      });
+
+      // In development with missing credentials, just log the email
+      if (process.env.NODE_ENV === 'development' && 
+          (!process.env.EMAIL_USER || 
+           !process.env.EMAIL_APP_PASSWORD || 
+           process.env.EMAIL_APP_PASSWORD === 'your-gmail-app-password-here')) {
+        console.log('📧 Development mode: Email not sent (credentials not configured)');
+        console.log('Email content:', {
+          to: mailOptions.to,
+          subject: mailOptions.subject,
+          preview: options.text?.substring(0, 100) + '...'
         });
+        return;
       }
 
       // Send the email
       const info = await this.transporter.sendMail(mailOptions);
-      console.log('Email sent:', info.messageId);
-    } catch (error) {
-      console.error('Failed to send email:', error);
+      console.log('Email sent successfully:', info.messageId);
+    } catch (error: any) {
+      console.error('Failed to send email:', error.message || error);
+      if (error.code === 'EAUTH') {
+        console.error('Authentication failed. Check EMAIL_USER and EMAIL_APP_PASSWORD environment variables.');
+      } else if (error.code === 'ESOCKET' || error.code === 'ETIMEDOUT') {
+        console.error('Network error: Unable to connect to email server. Check your internet connection and firewall settings.');
+      }
       throw error;
     }
   }

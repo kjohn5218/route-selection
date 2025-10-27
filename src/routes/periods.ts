@@ -515,13 +515,18 @@ router.get('/:id/statistics', authenticateToken, requireAdmin, async (req: Reque
 // POST /api/periods/:id/notify - Send notifications to eligible drivers
 router.post('/:id/notify', authenticateToken, requireAdmin, async (req: Request, res: Response) => {
   try {
+    console.log('Notification request received for period:', req.params.id);
+    
     const period = await prisma.selectionPeriod.findUnique({
       where: { id: req.params.id },
     });
 
     if (!period) {
+      console.error('Period not found:', req.params.id);
       return res.status(404).json({ error: 'Selection period not found' });
     }
+
+    console.log('Period found:', period.name, 'Status:', period.status);
 
     if (period.status !== 'UPCOMING' && period.status !== 'OPEN') {
       return res.status(400).json({ 
@@ -530,12 +535,9 @@ router.post('/:id/notify', authenticateToken, requireAdmin, async (req: Request,
     }
 
     // Get all eligible employees who haven't been notified
-    const eligibleEmployees = await prisma.employee.findMany({
+    const allEligibleEmployees = await prisma.employee.findMany({
       where: {
         isEligible: true,
-        user: {
-          email: { not: null },
-        },
       },
       include: {
         user: {
@@ -545,14 +547,26 @@ router.post('/:id/notify', authenticateToken, requireAdmin, async (req: Request,
         },
       },
     });
+    
+    // Filter for employees that have user accounts
+    const eligibleEmployees = allEligibleEmployees.filter(emp => emp.user !== null);
+
+    console.log(`Found ${eligibleEmployees.length} eligible employees`);
 
     if (eligibleEmployees.length === 0) {
       return res.status(400).json({ error: 'No eligible employees found to notify' });
     }
 
+    // Check email service configuration
+    if (!process.env.EMAIL_USER || !process.env.EMAIL_APP_PASSWORD) {
+      console.error('Email configuration missing. EMAIL_USER:', !!process.env.EMAIL_USER, 'EMAIL_APP_PASSWORD:', !!process.env.EMAIL_APP_PASSWORD);
+      return res.status(500).json({ error: 'Email service not configured' });
+    }
+
     // Send email notifications to all eligible employees
     let successCount = 0;
     let failureCount = 0;
+    const failedEmails: string[] = [];
     const emailPromises = [];
 
     for (const employee of eligibleEmployees) {
@@ -567,9 +581,11 @@ router.post('/:id/notify', authenticateToken, requireAdmin, async (req: Request,
           }
         ).then(() => {
           successCount++;
+          console.log(`✅ Email sent to ${employee.user?.email}`);
         }).catch((error) => {
-          console.error(`Failed to send email to ${employee.user?.email}:`, error);
+          console.error(`❌ Failed to send email to ${employee.user?.email}:`, error.message || error);
           failureCount++;
+          failedEmails.push(employee.user?.email || 'unknown');
         });
         
         emailPromises.push(emailPromise);
@@ -585,11 +601,11 @@ router.post('/:id/notify', authenticateToken, requireAdmin, async (req: Request,
         userId: req.user!.id,
         action: 'SEND_PERIOD_NOTIFICATION',
         resource: 'SelectionPeriod',
-        details: `Sent notifications to ${successCount} eligible drivers for period: ${period.name}. Failed: ${failureCount}`,
+        details: `Sent notifications to ${successCount} eligible drivers for period: ${period.name}. Failed: ${failureCount}${failedEmails.length > 0 ? ` (${failedEmails.join(', ')})` : ''}`,
       },
     });
 
-    console.log(`Email notifications sent: ${successCount} successful, ${failureCount} failed`);
+    console.log(`Email notifications completed: ${successCount} successful, ${failureCount} failed`);
 
     res.json({
       success: true,
@@ -603,9 +619,10 @@ router.post('/:id/notify', authenticateToken, requireAdmin, async (req: Request,
         endDate: period.endDate,
       },
     });
-  } catch (error) {
+  } catch (error: any) {
     console.error('Send notifications error:', error);
-    res.status(500).json({ error: 'Internal server error' });
+    console.error('Error stack:', error.stack);
+    res.status(500).json({ error: error.message || 'Internal server error' });
   }
 });
 
