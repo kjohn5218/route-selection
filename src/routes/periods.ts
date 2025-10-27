@@ -563,37 +563,62 @@ router.post('/:id/notify', authenticateToken, requireAdmin, async (req: Request,
       return res.status(500).json({ error: 'Email service not configured' });
     }
 
-    // Send email notifications to all eligible employees
+    // Send email notifications to all eligible employees with rate limiting
     let successCount = 0;
     let failureCount = 0;
     const failedEmails: string[] = [];
-    const emailPromises = [];
-
-    for (const employee of eligibleEmployees) {
-      if (employee.user?.email) {
-        const emailPromise = emailService.sendSelectionPeriodNotification(
-          employee.user.email,
-          `${employee.firstName} ${employee.lastName}`,
-          {
-            name: period.name,
-            startDate: period.startDate,
-            endDate: period.endDate,
+    
+    // Process emails in batches to avoid rate limiting
+    const BATCH_SIZE = 5;
+    const DELAY_BETWEEN_BATCHES = 2000; // 2 seconds
+    const DELAY_BETWEEN_EMAILS = 500; // 0.5 seconds
+    
+    console.log(`Processing ${eligibleEmployees.length} emails in batches of ${BATCH_SIZE}`);
+    
+    for (let i = 0; i < eligibleEmployees.length; i += BATCH_SIZE) {
+      const batch = eligibleEmployees.slice(i, i + BATCH_SIZE);
+      console.log(`Processing batch ${Math.floor(i / BATCH_SIZE) + 1} of ${Math.ceil(eligibleEmployees.length / BATCH_SIZE)}`);
+      
+      // Process emails in the current batch sequentially with small delays
+      for (const employee of batch) {
+        if (employee.user?.email) {
+          try {
+            await emailService.sendSelectionPeriodNotification(
+              employee.user.email,
+              `${employee.firstName} ${employee.lastName}`,
+              {
+                name: period.name,
+                startDate: period.startDate,
+                endDate: period.endDate,
+              }
+            );
+            successCount++;
+            console.log(`✅ Email sent to ${employee.user?.email}`);
+            
+            // Small delay between individual emails
+            if (i + batch.indexOf(employee) < eligibleEmployees.length - 1) {
+              await new Promise(resolve => setTimeout(resolve, DELAY_BETWEEN_EMAILS));
+            }
+          } catch (error: any) {
+            console.error(`❌ Failed to send email to ${employee.user?.email}:`, error.message || error);
+            failureCount++;
+            failedEmails.push(employee.user?.email || 'unknown');
+            
+            // If we get a rate limit error, wait longer before continuing
+            if (error.message?.includes('421') || error.message?.includes('Temporary System Problem')) {
+              console.log('Rate limit detected, waiting 5 seconds...');
+              await new Promise(resolve => setTimeout(resolve, 5000));
+            }
           }
-        ).then(() => {
-          successCount++;
-          console.log(`✅ Email sent to ${employee.user?.email}`);
-        }).catch((error) => {
-          console.error(`❌ Failed to send email to ${employee.user?.email}:`, error.message || error);
-          failureCount++;
-          failedEmails.push(employee.user?.email || 'unknown');
-        });
-        
-        emailPromises.push(emailPromise);
+        }
+      }
+      
+      // Delay between batches (except for the last batch)
+      if (i + BATCH_SIZE < eligibleEmployees.length) {
+        console.log(`Waiting ${DELAY_BETWEEN_BATCHES / 1000} seconds before next batch...`);
+        await new Promise(resolve => setTimeout(resolve, DELAY_BETWEEN_BATCHES));
       }
     }
-
-    // Wait for all emails to be sent
-    await Promise.all(emailPromises);
 
     // Log the notification attempt
     await prisma.auditLog.create({

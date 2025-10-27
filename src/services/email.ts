@@ -50,7 +50,10 @@ class EmailService {
     }
   }
 
-  async sendEmail(options: EmailOptions): Promise<void> {
+  async sendEmail(options: EmailOptions, retryCount = 0): Promise<void> {
+    const MAX_RETRIES = 3;
+    const RETRY_DELAY = 5000; // 5 seconds
+    
     try {
       // Apply email override if set
       const to = this.emailOverride || options.to;
@@ -70,6 +73,7 @@ class EmailService {
         actualTo: mailOptions.to,
         subject: options.subject,
         override: this.emailOverride ? 'ACTIVE' : 'NONE',
+        attempt: retryCount + 1,
       });
 
       // In development with missing credentials, just log the email
@@ -91,11 +95,27 @@ class EmailService {
       console.log('Email sent successfully:', info.messageId);
     } catch (error: any) {
       console.error('Failed to send email:', error.message || error);
+      
+      // Check for rate limiting or temporary errors
+      const isTemporaryError = error.code === 'ESOCKET' || 
+                              error.code === 'ETIMEDOUT' ||
+                              error.message?.includes('421') ||
+                              error.message?.includes('Temporary System Problem');
+      
+      if (isTemporaryError && retryCount < MAX_RETRIES) {
+        console.log(`Temporary error detected. Retrying in ${RETRY_DELAY / 1000} seconds... (Attempt ${retryCount + 2} of ${MAX_RETRIES + 1})`);
+        await new Promise(resolve => setTimeout(resolve, RETRY_DELAY));
+        return this.sendEmail(options, retryCount + 1);
+      }
+      
       if (error.code === 'EAUTH') {
         console.error('Authentication failed. Check EMAIL_USER and EMAIL_APP_PASSWORD environment variables.');
       } else if (error.code === 'ESOCKET' || error.code === 'ETIMEDOUT') {
         console.error('Network error: Unable to connect to email server. Check your internet connection and firewall settings.');
+      } else if (error.message?.includes('421')) {
+        console.error('Gmail rate limit reached. Please wait before sending more emails.');
       }
+      
       throw error;
     }
   }
