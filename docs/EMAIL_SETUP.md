@@ -15,7 +15,7 @@ Add these variables to your `.env` file:
 EMAIL_USER="kevobhave@gmail.com"           # Your Gmail address
 EMAIL_APP_PASSWORD="your-app-password"      # Gmail App Password (NOT your regular password)
 EMAIL_OVERRIDE="kjohn@ccfs.com"            # All emails will be sent to this address (for testing)
-APP_URL="http://localhost:3001"             # Your application URL
+APP_URL="http://localhost:5173"             # Your frontend URL (for email links)
 ```
 
 ### Gmail App Password Setup
