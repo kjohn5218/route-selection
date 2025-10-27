@@ -359,6 +359,23 @@ router.post('/', authenticateToken, async (req: Request, res: Response) => {
       },
     });
 
+    // Create audit log for selection creation
+    await prisma.auditLog.create({
+      data: {
+        userId: req.user.id,
+        action: 'CREATE_SELECTION',
+        resource: 'Selection',
+        details: JSON.stringify({
+          selectionId: selection.id,
+          selectionPeriodId: data.selectionPeriodId,
+          firstChoice: selection.firstChoice?.runNumber || null,
+          secondChoice: selection.secondChoice?.runNumber || null,
+          thirdChoice: selection.thirdChoice?.runNumber || null,
+          confirmationNumber: confirmationNumber,
+        }),
+      },
+    });
+
     res.status(201).json(selection);
   } catch (error) {
     console.error('Create selection error:', error);
@@ -472,6 +489,24 @@ router.put('/:id', authenticateToken, async (req: Request, res: Response) => {
       },
     });
 
+    // Create audit log for selection update
+    await prisma.auditLog.create({
+      data: {
+        userId: req.user!.id,
+        action: 'UPDATE_SELECTION',
+        resource: 'Selection',
+        details: JSON.stringify({
+          selectionId: selection.id,
+          selectionPeriodId: existingSelection.selectionPeriodId,
+          updatedChoices: {
+            firstChoice: selection.firstChoice?.runNumber || null,
+            secondChoice: selection.secondChoice?.runNumber || null,
+            thirdChoice: selection.thirdChoice?.runNumber || null,
+          },
+        }),
+      },
+    });
+
     res.json(selection);
   } catch (error) {
     console.error('Update selection error:', error);
@@ -509,6 +544,20 @@ router.delete('/:id', authenticateToken, async (req: Request, res: Response) => 
 
     await prisma.selection.delete({
       where: { id: req.params.id },
+    });
+
+    // Create audit log for selection deletion
+    await prisma.auditLog.create({
+      data: {
+        userId: req.user!.id,
+        action: 'DELETE_SELECTION',
+        resource: 'Selection',
+        details: JSON.stringify({
+          selectionId: req.params.id,
+          selectionPeriod: existingSelection.selectionPeriod.name,
+          selectionPeriodId: existingSelection.selectionPeriodId,
+        }),
+      },
     });
 
     res.status(204).send();

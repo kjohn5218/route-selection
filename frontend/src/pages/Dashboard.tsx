@@ -17,6 +17,16 @@ interface DashboardStats {
   completedSelections: number;
 }
 
+interface Activity {
+  id: string;
+  action: string;
+  resource: string;
+  details: string;
+  timestamp: string;
+  user: string;
+  userRole: string;
+}
+
 const Dashboard = () => {
   const { user } = useAuth();
   
@@ -24,6 +34,14 @@ const Dashboard = () => {
     queryKey: ['dashboard-stats'],
     queryFn: async () => {
       const response = await apiClient.get('/dashboard/stats');
+      return response.data;
+    },
+  });
+
+  const { data: activities = [], isLoading: activitiesLoading } = useQuery<Activity[]>({
+    queryKey: ['recent-activity'],
+    queryFn: async () => {
+      const response = await apiClient.get('/dashboard/activity?limit=5');
       return response.data;
     },
   });
@@ -50,7 +68,25 @@ const Dashboard = () => {
     );
   }
 
-  const statCards = [
+  const statCards = user?.role === 'DRIVER' ? [
+    {
+      title: 'Available Routes',
+      value: stats?.totalRoutes || 0,
+      icon: Route,
+      color: 'green',
+      trend: 'Total',
+      trendUp: true,
+      visible: true,
+    },
+    {
+      title: 'My Selection Status',
+      value: stats?.completedSelections > 0 ? 'Submitted' : 'Pending',
+      icon: stats?.completedSelections > 0 ? CheckSquare : Clock,
+      color: stats?.completedSelections > 0 ? 'purple' : 'yellow',
+      isText: true,
+      visible: true,
+    },
+  ] : [
     {
       title: 'Total Employees',
       value: stats?.totalEmployees || 0,
@@ -58,7 +94,7 @@ const Dashboard = () => {
       color: 'primary',
       trend: '+12%',
       trendUp: true,
-      visible: user?.role !== 'Driver',
+      visible: true,
     },
     {
       title: 'Total Routes',
@@ -160,7 +196,9 @@ const Dashboard = () => {
             Welcome back, {user?.name.split(' ')[0]}! 👋
           </h1>
           <p className="text-primary-100 text-lg">
-            {new Date().toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric', year: 'numeric' })}
+            {user?.role === 'DRIVER' 
+              ? 'Access your route selections and view available routes'
+              : new Date().toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric', year: 'numeric' })}
           </p>
           {stats?.activePeriod && (
             <div className="mt-6 inline-flex items-center gap-2 bg-white/20 backdrop-blur-sm px-4 py-2 rounded-lg">
@@ -191,19 +229,27 @@ const Dashboard = () => {
                     <div className="space-y-3">
                       <p className="text-sm font-medium text-gray-600">{card.title}</p>
                       <p className="text-3xl font-bold text-gray-900">
-                        {card.value.toLocaleString()}
+                        {(card as any).isText ? card.value : card.value.toLocaleString()}
                       </p>
-                      <div className="flex items-center gap-2">
-                        <span className={`inline-flex items-center gap-1 text-xs font-medium px-2 py-1 rounded-full ${colors.trendBg} ${colors.trend}`}>
-                          {card.trendUp ? (
-                            <ArrowUp className="w-3 h-3" />
+                      {card.trend && (
+                        <div className="flex items-center gap-2">
+                          {user?.role !== 'DRIVER' ? (
+                            <>
+                              <span className={`inline-flex items-center gap-1 text-xs font-medium px-2 py-1 rounded-full ${colors.trendBg} ${colors.trend}`}>
+                                {card.trendUp ? (
+                                  <ArrowUp className="w-3 h-3" />
+                                ) : (
+                                  <ArrowDown className="w-3 h-3" />
+                                )}
+                                {card.trend}
+                              </span>
+                              <span className="text-xs text-gray-500">vs last period</span>
+                            </>
                           ) : (
-                            <ArrowDown className="w-3 h-3" />
+                            <span className="text-xs text-gray-500">{card.trend}</span>
                           )}
-                          {card.trend}
-                        </span>
-                        <span className="text-xs text-gray-500">vs last period</span>
-                      </div>
+                        </div>
+                      )}
                     </div>
                     <div className={`${colors.icon} p-3 rounded-xl`}>
                       <Icon className={`w-6 h-6 ${colors.iconText}`} />
@@ -274,8 +320,45 @@ const Dashboard = () => {
         </div>
       )}
 
+      {/* Driver Quick Actions */}
+      {user?.role === 'DRIVER' && stats?.activePeriod && (
+        <div className="card">
+          <div className="p-6">
+            <h2 className="text-lg font-semibold text-gray-900 mb-4">Quick Actions</h2>
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              <Link
+                to="/selections"
+                className="card-hover p-6 text-left group"
+              >
+                <div className="bg-purple-100 p-3 rounded-xl inline-flex mb-4 group-hover:scale-110 transition-transform duration-200">
+                  <CheckSquare className="w-6 h-6 text-purple-600" />
+                </div>
+                <h3 className="font-semibold text-gray-900 mb-1">
+                  {stats.completedSelections > 0 ? 'View My Selections' : 'Submit Route Selection'}
+                </h3>
+                <p className="text-sm text-gray-600">
+                  {stats.completedSelections > 0 
+                    ? 'Review your submitted route preferences'
+                    : 'Select your preferred routes for this period'}
+                </p>
+              </Link>
+              <a
+                href="/forgot-password"
+                className="card-hover p-6 text-left group"
+              >
+                <div className="bg-primary-100 p-3 rounded-xl inline-flex mb-4 group-hover:scale-110 transition-transform duration-200">
+                  <Shield className="w-6 h-6 text-primary-600" />
+                </div>
+                <h3 className="font-semibold text-gray-900 mb-1">Update Password</h3>
+                <p className="text-sm text-gray-600">Change your account password</p>
+              </a>
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* Quick Actions */}
-      {user?.role !== 'Driver' && (
+      {user?.role !== 'DRIVER' && (
         <div>
           <h2 className="text-lg font-semibold text-gray-900 mb-4">Quick Actions</h2>
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
@@ -304,29 +387,103 @@ const Dashboard = () => {
       {/* Recent Activity */}
       <div className="card">
         <div className="p-6 border-b border-gray-100">
-          <h2 className="text-lg font-semibold text-gray-900">Recent Activity</h2>
+          <h2 className="text-lg font-semibold text-gray-900">
+            {user?.role === 'DRIVER' ? 'My Recent Activity' : 'Recent Activity'}
+          </h2>
         </div>
         <div className="p-6">
-          <div className="space-y-4">
-            {[
-              { time: '2 hours ago', action: 'John Doe selected Route #45', type: 'selection' },
-              { time: '3 hours ago', action: 'New route "Downtown Express" added', type: 'route' },
-              { time: '5 hours ago', action: 'Selection period "Spring 2024" activated', type: 'period' },
-              { time: '1 day ago', action: 'Mary Smith completed profile update', type: 'user' },
-            ].map((activity, index) => (
-              <div key={index} className="flex items-start gap-3">
-                <div className="w-2 h-2 bg-gray-400 rounded-full mt-1.5 flex-shrink-0" />
-                <div className="flex-1 min-w-0">
-                  <p className="text-sm text-gray-900">{activity.action}</p>
-                  <p className="text-xs text-gray-500 mt-0.5">{activity.time}</p>
-                </div>
-              </div>
-            ))}
-          </div>
+          {activitiesLoading ? (
+            <div className="flex justify-center py-4">
+              <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary-600"></div>
+            </div>
+          ) : activities.length > 0 ? (
+            <div className="space-y-4">
+              {activities.map((activity) => {
+                const timeAgo = getTimeAgo(new Date(activity.timestamp));
+                const activityText = formatActivityText(activity);
+                
+                return (
+                  <div key={activity.id} className="flex items-start gap-3">
+                    <div className={`w-2 h-2 rounded-full mt-1.5 flex-shrink-0 ${
+                      activity.action.includes('SELECTION') ? 'bg-purple-400' :
+                      activity.action.includes('ROUTE') ? 'bg-green-400' :
+                      activity.action.includes('PERIOD') ? 'bg-yellow-400' :
+                      'bg-gray-400'
+                    }`} />
+                    <div className="flex-1 min-w-0">
+                      <p className="text-sm text-gray-900">{activityText}</p>
+                      <p className="text-xs text-gray-500 mt-0.5">{timeAgo}</p>
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          ) : (
+            <p className="text-sm text-gray-500 text-center py-4">
+              {user?.role === 'DRIVER' ? 'No recent activity to display' : 'No activity recorded yet'}
+            </p>
+          )}
         </div>
       </div>
     </div>
   );
 };
+
+// Helper functions
+function getTimeAgo(date: Date): string {
+  const seconds = Math.floor((new Date().getTime() - date.getTime()) / 1000);
+  
+  let interval = Math.floor(seconds / 31536000);
+  if (interval > 1) return `${interval} years ago`;
+  if (interval === 1) return '1 year ago';
+  
+  interval = Math.floor(seconds / 2592000);
+  if (interval > 1) return `${interval} months ago`;
+  if (interval === 1) return '1 month ago';
+  
+  interval = Math.floor(seconds / 86400);
+  if (interval > 1) return `${interval} days ago`;
+  if (interval === 1) return '1 day ago';
+  
+  interval = Math.floor(seconds / 3600);
+  if (interval > 1) return `${interval} hours ago`;
+  if (interval === 1) return '1 hour ago';
+  
+  interval = Math.floor(seconds / 60);
+  if (interval > 1) return `${interval} minutes ago`;
+  if (interval === 1) return '1 minute ago';
+  
+  return 'Just now';
+}
+
+function formatActivityText(activity: Activity): string {
+  switch (activity.action) {
+    case 'CREATE_SELECTION':
+    case 'UPDATE_SELECTION':
+      return `${activity.user} submitted route selections`;
+    case 'DELETE_SELECTION':
+      return `${activity.user} cancelled route selections`;
+    case 'CREATE_ROUTE':
+      return `New route created: ${activity.details}`;
+    case 'UPDATE_ROUTE':
+      return `Route updated: ${activity.details}`;
+    case 'SEND_PERIOD_NOTIFICATION':
+      return `Notifications sent: ${activity.details}`;
+    case 'PROCESS_ASSIGNMENTS':
+      return `Assignments processed: ${activity.details}`;
+    case 'PASSWORD_RESET_REQUEST':
+      return 'Password reset requested';
+    case 'PASSWORD_RESET_COMPLETE':
+      return 'Password successfully reset';
+    case 'LOGIN':
+      return `${activity.user} logged in`;
+    case 'IMPORT_DATA':
+      return `Data imported: ${activity.details}`;
+    case 'EXPORT_DATA':
+      return `Data exported: ${activity.details}`;
+    default:
+      return activity.details || activity.action;
+  }
+}
 
 export default Dashboard;

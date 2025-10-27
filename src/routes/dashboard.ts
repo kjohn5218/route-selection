@@ -79,4 +79,51 @@ router.get('/stats', authenticateToken, async (req: AuthRequest, res: Response) 
   }
 });
 
+// Get recent activity
+router.get('/activity', authenticateToken, async (req: AuthRequest, res: Response) => {
+  try {
+    const limit = parseInt(req.query.limit as string) || 10;
+    
+    let where: any = {};
+    
+    // For drivers, only show their own activity
+    if (req.user?.role === 'DRIVER') {
+      where.userId = req.user.id;
+    }
+    
+    // Get recent audit logs
+    const activities = await prisma.auditLog.findMany({
+      where,
+      orderBy: {
+        timestamp: 'desc',
+      },
+      take: limit,
+      include: {
+        user: {
+          select: {
+            name: true,
+            role: true,
+          },
+        },
+      },
+    });
+    
+    // Format activities for frontend
+    const formattedActivities = activities.map(activity => ({
+      id: activity.id,
+      action: activity.action,
+      resource: activity.resource,
+      details: activity.details,
+      timestamp: activity.timestamp,
+      user: activity.user.name,
+      userRole: activity.user.role,
+    }));
+    
+    res.json(formattedActivities);
+  } catch (error) {
+    console.error('Error fetching recent activity:', error);
+    res.status(500).json({ error: 'Failed to fetch recent activity' });
+  }
+});
+
 export default router;

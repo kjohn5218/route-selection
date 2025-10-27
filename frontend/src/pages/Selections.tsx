@@ -189,23 +189,108 @@ const Selections = () => {
     );
   }
 
-  // Already submitted
-  if (currentSelection) {
+  // Update selection mutation
+  const updateSelection = useMutation({
+    mutationFn: async (data: {
+      id: string;
+      firstChoiceId?: string | null;
+      secondChoiceId?: string | null;
+      thirdChoiceId?: string | null;
+    }) => {
+      const { id, ...choices } = data;
+      const response = await apiClient.put(`/selections/${id}`, choices);
+      return response.data;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['my-selection'] });
+      setIsEditMode(false);
+      setSelectedChoices({
+        firstChoiceId: null,
+        secondChoiceId: null,
+        thirdChoiceId: null,
+      });
+    },
+  });
+
+  const deleteSelection = useMutation({
+    mutationFn: async (id: string) => {
+      const response = await apiClient.delete(`/selections/${id}`);
+      return response.data;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['my-selection'] });
+    },
+  });
+
+  const [isEditMode, setIsEditMode] = useState(false);
+
+  // Initialize edit mode selections
+  const handleEditClick = () => {
+    if (currentSelection) {
+      setSelectedChoices({
+        firstChoiceId: currentSelection.firstChoiceId,
+        secondChoiceId: currentSelection.secondChoiceId,
+        thirdChoiceId: currentSelection.thirdChoiceId,
+      });
+      setIsEditMode(true);
+    }
+  };
+
+  const handleUpdate = () => {
+    if (!currentSelection) return;
+
+    const choices = Object.entries(selectedChoices)
+      .filter(([_, value]) => value !== null)
+      .reduce((acc, [key, value]) => ({ ...acc, [key]: value }), {});
+
+    updateSelection.mutate({
+      id: currentSelection.id,
+      ...choices,
+    });
+  };
+
+  // Already submitted - show view/edit mode
+  if (currentSelection && !isEditMode) {
+    const isOpen = activePeriod?.status === 'OPEN';
+    
     return (
       <div className="max-w-4xl mx-auto">
         <h1 className="text-2xl font-bold text-gray-900 mb-6">Route Selection</h1>
         <div className="bg-green-50 border border-green-200 rounded-lg p-6 mb-6">
-          <div className="flex items-center gap-3">
-            <CheckCircle className="w-6 h-6 text-green-600" />
-            <div>
-              <h3 className="font-semibold text-green-900">Selection Submitted</h3>
-              <p className="text-green-700 mt-1">
-                Your route selection has been submitted successfully.
-              </p>
-              <p className="text-sm text-green-600 mt-2">
-                Confirmation #: {currentSelection.confirmationNumber}
-              </p>
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-3">
+              <CheckCircle className="w-6 h-6 text-green-600" />
+              <div>
+                <h3 className="font-semibold text-green-900">Selection Submitted</h3>
+                <p className="text-green-700 mt-1">
+                  Your route selection has been submitted successfully.
+                </p>
+                <p className="text-sm text-green-600 mt-2">
+                  Confirmation #: {currentSelection.confirmationNumber}
+                </p>
+              </div>
             </div>
+            {isOpen && (
+              <div className="flex gap-2">
+                <button
+                  onClick={handleEditClick}
+                  className="btn-secondary"
+                >
+                  Edit Selection
+                </button>
+                <button
+                  onClick={() => {
+                    if (confirm('Are you sure you want to cancel your selection? This cannot be undone.')) {
+                      deleteSelection.mutate(currentSelection.id);
+                    }
+                  }}
+                  disabled={deleteSelection.isPending}
+                  className="btn-danger"
+                >
+                  Cancel Selection
+                </button>
+              </div>
+            )}
           </div>
         </div>
 
@@ -241,6 +326,17 @@ const Selections = () => {
             </div>
           ))}
         </div>
+        
+        {!isOpen && (
+          <div className="mt-6 bg-yellow-50 border border-yellow-200 rounded-lg p-4">
+            <div className="flex items-center gap-3">
+              <AlertCircle className="w-5 h-5 text-yellow-600" />
+              <p className="text-yellow-700 text-sm">
+                The selection period has closed. You can no longer modify your selections.
+              </p>
+            </div>
+          </div>
+        )}
       </div>
     );
   }
@@ -276,13 +372,41 @@ const Selections = () => {
         </div>
       </div>
 
-      {submitSelection.error && (
+      {(submitSelection.error || updateSelection.error) && (
         <div className="mb-6 bg-red-50 border border-red-200 rounded-lg p-4">
           <div className="flex items-center gap-3">
             <AlertCircle className="w-5 h-5 text-red-600" />
             <p className="text-red-700">
-              {(submitSelection.error as any).response?.data?.error || 'Failed to submit selection'}
+              {(submitSelection.error as any)?.response?.data?.error || 
+               (updateSelection.error as any)?.response?.data?.error || 
+               'Failed to submit selection'}
             </p>
+          </div>
+        </div>
+      )}
+
+      {isEditMode && (
+        <div className="mb-4 bg-blue-50 border border-blue-200 rounded-lg p-4">
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-3">
+              <AlertCircle className="w-5 h-5 text-blue-600" />
+              <p className="text-blue-700 font-medium">
+                Edit Mode - Update your route selections below
+              </p>
+            </div>
+            <button
+              onClick={() => {
+                setIsEditMode(false);
+                setSelectedChoices({
+                  firstChoiceId: null,
+                  secondChoiceId: null,
+                  thirdChoiceId: null,
+                });
+              }}
+              className="text-blue-600 hover:text-blue-700 text-sm font-medium"
+            >
+              Cancel Edit
+            </button>
           </div>
         </div>
       )}
@@ -389,11 +513,12 @@ const Selections = () => {
 
       <div className="flex justify-end">
         <button
-          onClick={handleSubmit}
-          disabled={!selectedRouteIds.length || submitSelection.isPending}
+          onClick={isEditMode ? handleUpdate : handleSubmit}
+          disabled={!selectedRouteIds.length || submitSelection.isPending || updateSelection.isPending}
           className="btn-primary"
         >
-          {submitSelection.isPending ? 'Submitting...' : 'Submit Selection'}
+          {submitSelection.isPending || updateSelection.isPending ? 'Saving...' : 
+           isEditMode ? 'Update Selection' : 'Submit Selection'}
         </button>
       </div>
     </div>
