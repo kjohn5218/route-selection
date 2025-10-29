@@ -99,7 +99,8 @@ router.get('/active', authenticateToken, async (req: Request, res: Response) => 
       name: activePeriod.name,
       status: activePeriod.status,
       startDate: activePeriod.startDate,
-      endDate: activePeriod.endDate
+      endDate: activePeriod.endDate,
+      requiredSelections: activePeriod.requiredSelections
     });
 
     const periodWithStats = {

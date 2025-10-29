@@ -169,40 +169,6 @@ const Selections = () => {
     }
   };
 
-  // Admin view - show all selections
-  if (user?.role === 'Admin') {
-    return (
-      <div>
-        <h1 className="text-2xl font-bold text-gray-900 mb-6">Route Selections</h1>
-        <div className="card">
-          <div className="p-6">
-            <p className="text-gray-600">Admin view for managing all employee selections.</p>
-          </div>
-        </div>
-      </div>
-    );
-  }
-
-  // No active period
-  if (!activePeriod || activePeriod.status !== 'OPEN') {
-    return (
-      <div className="max-w-4xl mx-auto">
-        <h1 className="text-2xl font-bold text-gray-900 mb-6">Route Selection</h1>
-        <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-6">
-          <div className="flex items-center gap-3">
-            <AlertCircle className="w-6 h-6 text-yellow-600" />
-            <div>
-              <h3 className="font-semibold text-yellow-900">No Active Selection Period</h3>
-              <p className="text-yellow-700 mt-1">
-                There is no selection period currently open. Please check back later or contact your administrator.
-              </p>
-            </div>
-          </div>
-        </div>
-      </div>
-    );
-  }
-
   // Update selection mutation
   const updateSelection = useMutation({
     mutationFn: async (data: {
@@ -237,6 +203,40 @@ const Selections = () => {
   });
 
   const [isEditMode, setIsEditMode] = useState(false);
+
+  // Admin view - show all selections
+  if (user?.role === 'Admin') {
+    return (
+      <div>
+        <h1 className="text-2xl font-bold text-gray-900 mb-6">Route Selections</h1>
+        <div className="card">
+          <div className="p-6">
+            <p className="text-gray-600">Admin view for managing all employee selections.</p>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  // No active period
+  if (!activePeriod || activePeriod.status !== 'OPEN') {
+    return (
+      <div className="max-w-4xl mx-auto">
+        <h1 className="text-2xl font-bold text-gray-900 mb-6">Route Selection</h1>
+        <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-6">
+          <div className="flex items-center gap-3">
+            <AlertCircle className="w-6 h-6 text-yellow-600" />
+            <div>
+              <h3 className="font-semibold text-yellow-900">No Active Selection Period</h3>
+              <p className="text-yellow-700 mt-1">
+                There is no selection period currently open. Please check back later or contact your administrator.
+              </p>
+            </div>
+          </div>
+        </div>
+      </div>
+    );
+  }
 
   // Initialize edit mode selections
   const handleEditClick = () => {
