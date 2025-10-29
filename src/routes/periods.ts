@@ -17,10 +17,10 @@ const createPeriodSchema = z.object({
 
 const updatePeriodSchema = z.object({
   name: z.string().min(1, 'Name is required').optional(),
-  description: z.string().optional(),
+  description: z.string().nullable().optional(),
   startDate: z.string().regex(/^\d{4}-\d{2}-\d{2}$/, 'Date must be in YYYY-MM-DD format').optional(),
   endDate: z.string().regex(/^\d{4}-\d{2}-\d{2}$/, 'Date must be in YYYY-MM-DD format').optional(),
-  routeIds: z.array(z.string()).optional(),
+  routeIds: z.array(z.string()).nullable().optional(),
   requiredSelections: z.number().min(1).max(3).optional(),
   status: z.enum(['UPCOMING', 'OPEN', 'CLOSED', 'PROCESSING', 'COMPLETED']).optional(),
 });
@@ -247,7 +247,11 @@ router.post('/', authenticateToken, requireAdmin, async (req: Request, res: Resp
 // PUT /api/periods/:id - Update selection period (Admin only)
 router.put('/:id', authenticateToken, requireAdmin, async (req: Request, res: Response) => {
   try {
+    console.log('Update period request:', req.params.id);
+    console.log('Request body:', req.body);
+    
     const data = updatePeriodSchema.parse(req.body);
+    console.log('Parsed data:', data);
 
     const existingPeriod = await prisma.selectionPeriod.findUnique({
       where: { id: req.params.id },
@@ -315,7 +319,23 @@ router.put('/:id', authenticateToken, requireAdmin, async (req: Request, res: Re
       }
     }
 
-    const updateData: any = { ...data };
+    // Build update data with proper types
+    const updateData: {
+      name?: string;
+      description?: string;
+      startDate?: Date;
+      endDate?: Date;
+      requiredSelections?: number;
+      status?: string;
+    } = {};
+
+    // Only include fields that are provided
+    if (data.name !== undefined) updateData.name = data.name;
+    if (data.description !== undefined) updateData.description = data.description === '' ? null : data.description;
+    if (data.requiredSelections !== undefined) updateData.requiredSelections = data.requiredSelections;
+    if (data.status !== undefined) updateData.status = data.status;
+    
+    // Handle date conversions
     if (data.startDate) updateData.startDate = new Date(data.startDate + 'T00:00:00');
     if (data.endDate) updateData.endDate = new Date(data.endDate + 'T23:59:59');
 
@@ -329,6 +349,23 @@ router.put('/:id', authenticateToken, requireAdmin, async (req: Request, res: Re
 
       // If routeIds are provided, update the routes
       if (data.routeIds !== undefined) {
+        // Validate that all route IDs exist
+        if (data.routeIds.length > 0) {
+          const existingRoutes = await tx.route.findMany({
+            where: {
+              id: { in: data.routeIds }
+            },
+            select: { id: true }
+          });
+
+          const existingRouteIds = existingRoutes.map(r => r.id);
+          const invalidRouteIds = data.routeIds.filter(id => !existingRouteIds.includes(id));
+
+          if (invalidRouteIds.length > 0) {
+            throw new Error(`Invalid route IDs: ${invalidRouteIds.join(', ')}`);
+          }
+        }
+
         // Delete existing route associations
         await tx.periodRoute.deleteMany({
           where: { selectionPeriodId: req.params.id },
@@ -359,12 +396,39 @@ router.put('/:id', authenticateToken, requireAdmin, async (req: Request, res: Re
     });
 
     res.json(period);
-  } catch (error) {
+  } catch (error: any) {
     console.error('Update period error:', error);
+    console.error('Error details:', {
+      message: error.message,
+      code: error.code,
+      meta: error.meta,
+    });
+    
     if (error instanceof z.ZodError) {
       return res.status(400).json({ error: 'Invalid input', details: error.errors });
     }
-    res.status(500).json({ error: 'Internal server error' });
+    
+    // Handle specific database errors
+    if (error.code === 'P2003') {
+      return res.status(400).json({ 
+        error: 'Foreign key constraint failed. One or more route IDs do not exist.' 
+      });
+    }
+    
+    // Handle our custom validation error
+    if (error.message && error.message.startsWith('Invalid route IDs:')) {
+      return res.status(400).json({ error: error.message });
+    }
+    
+    // Handle generic database errors
+    if (error.code && error.code.startsWith('P')) {
+      return res.status(400).json({ 
+        error: 'Database operation failed', 
+        details: error.message 
+      });
+    }
+    
+    res.status(500).json({ error: error.message || 'Internal server error' });
   }
 });
 

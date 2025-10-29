@@ -196,17 +196,27 @@ const Periods = () => {
     });
   };
 
-  const handleEdit = (period: SelectionPeriod) => {
+  const handleEdit = async (period: SelectionPeriod) => {
     setSelectedPeriod(period);
-    setFormData({
-      name: period.name,
-      description: period.description || '',
-      startDate: period.startDate.split('T')[0],
-      endDate: period.endDate.split('T')[0],
-      routeIds: period.routes?.map((pr: any) => pr.route.id) || [],
-      requiredSelections: period.requiredSelections || 3,
-    });
-    setShowEditModal(true);
+    
+    // Fetch the full period details with routes
+    try {
+      const response = await apiClient.get(`/periods/${period.id}`);
+      const fullPeriod = response.data;
+      
+      setFormData({
+        name: fullPeriod.name,
+        description: fullPeriod.description || '',
+        startDate: fullPeriod.startDate.split('T')[0],
+        endDate: fullPeriod.endDate.split('T')[0],
+        routeIds: fullPeriod.routes?.map((pr: any) => pr.route.id) || [],
+        requiredSelections: fullPeriod.requiredSelections || 3,
+      });
+      setShowEditModal(true);
+    } catch (error) {
+      console.error('Error fetching period details:', error);
+      alert('Failed to load period details');
+    }
   };
 
   const handleSubmitAdd = (e: React.FormEvent) => {
