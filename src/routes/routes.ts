@@ -139,6 +139,10 @@ router.get('/available/:selectionPeriodId', authenticateToken, async (req: Reque
     });
 
     const periodRouteIds = periodRoutes.map(pr => pr.routeId);
+    
+    console.log('Available routes - Selection period:', selectionPeriodId);
+    console.log('Available routes - Period routes found:', periodRoutes.length);
+    console.log('Available routes - Period route IDs:', periodRouteIds);
 
     // Get routes that are active and not yet assigned for this period
     const assignedRouteIds = await prisma.assignment.findMany({

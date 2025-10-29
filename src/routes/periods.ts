@@ -212,6 +212,8 @@ router.post('/', authenticateToken, requireAdmin, async (req: Request, res: Resp
       return res.status(409).json({ error: 'Period overlaps with existing selection period' });
     }
 
+    console.log('Creating period with routeIds:', data.routeIds);
+    
     const period = await prisma.selectionPeriod.create({
       data: {
         name: data.name,
@@ -219,7 +221,7 @@ router.post('/', authenticateToken, requireAdmin, async (req: Request, res: Resp
         startDate,
         endDate,
         requiredSelections: data.requiredSelections || 3,
-        routes: data.routeIds ? {
+        routes: data.routeIds && data.routeIds.length > 0 ? {
           create: data.routeIds.map(routeId => ({
             routeId,
           })),
@@ -233,14 +235,29 @@ router.post('/', authenticateToken, requireAdmin, async (req: Request, res: Resp
         },
       },
     });
+    
+    console.log('Created period with routes:', period.routes.length);
 
     res.status(201).json(period);
-  } catch (error) {
+  } catch (error: any) {
     console.error('Create period error:', error);
+    console.error('Error details:', {
+      message: error.message,
+      code: error.code,
+      meta: error.meta,
+    });
+    
     if (error instanceof z.ZodError) {
       return res.status(400).json({ error: 'Invalid input', details: error.errors });
     }
-    res.status(500).json({ error: 'Internal server error' });
+    
+    if (error.code === 'P2003') {
+      return res.status(400).json({ 
+        error: 'One or more route IDs do not exist in the database' 
+      });
+    }
+    
+    res.status(500).json({ error: error.message || 'Internal server error' });
   }
 });
 
