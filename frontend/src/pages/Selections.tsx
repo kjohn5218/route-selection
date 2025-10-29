@@ -63,6 +63,7 @@ const Selections = () => {
     queryKey: ['active-selection-period'],
     queryFn: async () => {
       const response = await apiClient.get('/periods/active');
+      console.log('Active period response:', response.data);
       return response.data;
     },
   });
@@ -72,11 +73,16 @@ const Selections = () => {
     queryKey: ['available-routes', activePeriod?.id],
     queryFn: async () => {
       if (!activePeriod?.id) return [];
+      console.log('Fetching available routes for period:', activePeriod.id);
       const response = await apiClient.get(`/routes/available/${activePeriod.id}`);
+      console.log('Available routes response:', response.data);
       return response.data;
     },
     enabled: !!activePeriod?.id && activePeriod.status === 'OPEN',
   });
+
+  console.log('Available routes query enabled:', !!activePeriod?.id && activePeriod?.status === 'OPEN');
+  console.log('Active period:', activePeriod);
 
   // Get current selection
   const { data: currentSelection } = useQuery<Selection | null>({

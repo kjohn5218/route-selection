@@ -90,8 +90,17 @@ router.get('/active', authenticateToken, async (req: Request, res: Response) => 
     });
 
     if (!activePeriod) {
+      console.log('No active period found with status OPEN and current date in range');
       return res.status(404).json({ error: 'No active selection period found' });
     }
+
+    console.log('Active period found:', {
+      id: activePeriod.id,
+      name: activePeriod.name,
+      status: activePeriod.status,
+      startDate: activePeriod.startDate,
+      endDate: activePeriod.endDate
+    });
 
     const periodWithStats = {
       ...activePeriod,
