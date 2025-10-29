@@ -29,7 +29,7 @@ async function importData() {
             data: route
           });
           routesImported++;
-        } catch (error) {
+        } catch (error: any) {
           if (error.code === 'P2002') {
             console.log(`⚠️  Route ${route.runNumber} already exists, skipping...`);
           } else {
@@ -82,7 +82,7 @@ async function importData() {
             data: employee
           });
           employeesImported++;
-        } catch (error) {
+        } catch (error: any) {
           if (error.code === 'P2002') {
             console.log(`⚠️  Employee ${employee.employeeId} already exists, skipping...`);
           } else {
