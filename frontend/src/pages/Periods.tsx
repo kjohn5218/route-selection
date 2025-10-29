@@ -30,6 +30,7 @@ interface SelectionPeriod {
   startDate: string;
   endDate: string;
   status: 'UPCOMING' | 'OPEN' | 'CLOSED' | 'PROCESSING' | 'COMPLETED';
+  requiredSelections: number;
   createdAt: string;
   _count?: {
     selections: number;
@@ -42,6 +43,7 @@ interface PeriodFormData {
   startDate: string;
   endDate: string;
   routeIds?: string[];
+  requiredSelections: number;
 }
 
 const Periods = () => {
@@ -61,6 +63,7 @@ const Periods = () => {
     startDate: '',
     endDate: '',
     routeIds: [],
+    requiredSelections: 3,
   });
 
   // Fetch periods
@@ -189,6 +192,7 @@ const Periods = () => {
       startDate: '',
       endDate: '',
       routeIds: [],
+      requiredSelections: 3,
     });
   };
 
@@ -200,6 +204,7 @@ const Periods = () => {
       startDate: period.startDate.split('T')[0],
       endDate: period.endDate.split('T')[0],
       routeIds: period.routes?.map((pr: any) => pr.route.id) || [],
+      requiredSelections: period.requiredSelections || 3,
     });
     setShowEditModal(true);
   };
@@ -652,6 +657,22 @@ const Periods = () => {
                 />
               </div>
               <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">Required Selections</label>
+                <select
+                  value={formData.requiredSelections}
+                  onChange={(e) => setFormData({ ...formData, requiredSelections: parseInt(e.target.value) })}
+                  className="input-field"
+                  required
+                >
+                  <option value={1}>1 Route Selection</option>
+                  <option value={2}>2 Route Selections</option>
+                  <option value={3}>3 Route Selections</option>
+                </select>
+                <p className="text-xs text-gray-500 mt-1">
+                  How many route choices can drivers submit?
+                </p>
+              </div>
+              <div>
                 <label className="block text-sm font-medium text-gray-700 mb-2">Available Routes</label>
                 <div className="border rounded-lg p-3 max-h-48 overflow-y-auto space-y-2">
                   {allRoutes.length === 0 ? (
@@ -765,6 +786,22 @@ const Periods = () => {
                   min={formData.startDate || new Date().toISOString().split('T')[0]}
                   required
                 />
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">Required Selections</label>
+                <select
+                  value={formData.requiredSelections}
+                  onChange={(e) => setFormData({ ...formData, requiredSelections: parseInt(e.target.value) })}
+                  className="input-field"
+                  required
+                >
+                  <option value={1}>1 Route Selection</option>
+                  <option value={2}>2 Route Selections</option>
+                  <option value={3}>3 Route Selections</option>
+                </select>
+                <p className="text-xs text-gray-500 mt-1">
+                  How many route choices can drivers submit?
+                </p>
               </div>
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-2">Available Routes</label>

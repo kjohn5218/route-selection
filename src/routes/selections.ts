@@ -283,6 +283,13 @@ router.post('/', authenticateToken, async (req: Request, res: Response) => {
     // Validate that choices are different and routes exist
     const choiceIds = [data.firstChoiceId, data.secondChoiceId, data.thirdChoiceId].filter(Boolean);
     const uniqueChoiceIds = new Set(choiceIds);
+    
+    // Validate number of selections doesn't exceed the period's requirement
+    if (choiceIds.length > selectionPeriod.requiredSelections) {
+      return res.status(400).json({ 
+        error: `This period allows a maximum of ${selectionPeriod.requiredSelections} route selection${selectionPeriod.requiredSelections > 1 ? 's' : ''}` 
+      });
+    }
 
     if (choiceIds.length !== uniqueChoiceIds.size) {
       return res.status(400).json({ error: 'Route choices must be different' });
@@ -422,6 +429,13 @@ router.put('/:id', authenticateToken, async (req: Request, res: Response) => {
     // Validate choices if provided
     const choiceIds = [data.firstChoiceId, data.secondChoiceId, data.thirdChoiceId].filter(Boolean);
     const uniqueChoiceIds = new Set(choiceIds);
+    
+    // Validate number of selections doesn't exceed the period's requirement
+    if (choiceIds.length > existingSelection.selectionPeriod.requiredSelections) {
+      return res.status(400).json({ 
+        error: `This period allows a maximum of ${existingSelection.selectionPeriod.requiredSelections} route selection${existingSelection.selectionPeriod.requiredSelections > 1 ? 's' : ''}` 
+      });
+    }
 
     if (choiceIds.length !== uniqueChoiceIds.size) {
       return res.status(400).json({ error: 'Route choices must be different' });

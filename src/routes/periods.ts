@@ -12,6 +12,7 @@ const createPeriodSchema = z.object({
   startDate: z.string().regex(/^\d{4}-\d{2}-\d{2}$/, 'Date must be in YYYY-MM-DD format'),
   endDate: z.string().regex(/^\d{4}-\d{2}-\d{2}$/, 'Date must be in YYYY-MM-DD format'),
   routeIds: z.array(z.string()).optional(),
+  requiredSelections: z.number().min(1).max(3).optional().default(3),
 });
 
 const updatePeriodSchema = createPeriodSchema.partial().extend({
@@ -211,6 +212,7 @@ router.post('/', authenticateToken, requireAdmin, async (req: Request, res: Resp
         description: data.description,
         startDate,
         endDate,
+        requiredSelections: data.requiredSelections || 3,
         routes: data.routeIds ? {
           create: data.routeIds.map(routeId => ({
             routeId,

@@ -1,5 +1,5 @@
 import { useQuery } from '@tanstack/react-query';
-import { Users, Route, Calendar, CheckSquare, TrendingUp, AlertCircle, ArrowUp, ArrowDown, Clock, Activity } from 'lucide-react';
+import { Users, Route, Calendar, CheckSquare, TrendingUp, AlertCircle, ArrowUp, ArrowDown, Clock, Activity, Shield } from 'lucide-react';
 import apiClient from '../api/client';
 import { useAuth } from '../contexts/AuthContext';
 import { Link } from 'react-router-dom';
@@ -68,7 +68,7 @@ const Dashboard = () => {
     );
   }
 
-  const statCards = user?.role === 'DRIVER' ? [
+  const statCards = user?.role === 'Driver' ? [
     {
       title: 'Available Routes',
       value: stats?.totalRoutes || 0,
@@ -80,9 +80,9 @@ const Dashboard = () => {
     },
     {
       title: 'My Selection Status',
-      value: stats?.completedSelections > 0 ? 'Submitted' : 'Pending',
-      icon: stats?.completedSelections > 0 ? CheckSquare : Clock,
-      color: stats?.completedSelections > 0 ? 'purple' : 'yellow',
+      value: stats?.completedSelections && stats.completedSelections > 0 ? 'Submitted' : 'Pending',
+      icon: stats?.completedSelections && stats.completedSelections > 0 ? CheckSquare : Clock,
+      color: stats?.completedSelections && stats.completedSelections > 0 ? 'purple' : 'yellow',
       isText: true,
       visible: true,
     },
@@ -196,7 +196,7 @@ const Dashboard = () => {
             Welcome back, {user?.name.split(' ')[0]}! 👋
           </h1>
           <p className="text-primary-100 text-lg">
-            {user?.role === 'DRIVER' 
+            {user?.role === 'Driver' 
               ? 'Access your route selections and view available routes'
               : new Date().toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric', year: 'numeric' })}
           </p>
@@ -212,54 +212,85 @@ const Dashboard = () => {
       </div>
 
       {/* Stats Grid */}
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
-        {statCards
-          .filter(card => card.visible)
-          .map((card) => {
-            const Icon = card.icon;
-            const colors = colorClasses[card.color as keyof typeof colorClasses];
-            
-            return (
-              <div
-                key={card.title}
-                className="card hover:shadow-md transition-shadow duration-200"
-              >
-                <div className="p-6">
-                  <div className="flex items-start justify-between">
-                    <div className="space-y-3">
-                      <p className="text-sm font-medium text-gray-600">{card.title}</p>
-                      <p className="text-3xl font-bold text-gray-900">
-                        {(card as any).isText ? card.value : card.value.toLocaleString()}
-                      </p>
-                      {card.trend && (
-                        <div className="flex items-center gap-2">
-                          {user?.role !== 'DRIVER' ? (
-                            <>
-                              <span className={`inline-flex items-center gap-1 text-xs font-medium px-2 py-1 rounded-full ${colors.trendBg} ${colors.trend}`}>
-                                {card.trendUp ? (
-                                  <ArrowUp className="w-3 h-3" />
-                                ) : (
-                                  <ArrowDown className="w-3 h-3" />
-                                )}
-                                {card.trend}
-                              </span>
-                              <span className="text-xs text-gray-500">vs last period</span>
-                            </>
-                          ) : (
+      {user?.role === 'Driver' ? (
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+          {statCards
+            .filter(card => card.visible)
+            .map((card) => {
+              const Icon = card.icon;
+              const colors = colorClasses[card.color as keyof typeof colorClasses];
+              
+              return (
+                <div
+                  key={card.title}
+                  className="card hover:shadow-md transition-shadow duration-200"
+                >
+                  <div className="p-6">
+                    <div className="flex items-start justify-between">
+                      <div className="space-y-3">
+                        <p className="text-sm font-medium text-gray-600">{card.title}</p>
+                        <p className="text-3xl font-bold text-gray-900">
+                          {(card as any).isText ? card.value : card.value.toLocaleString()}
+                        </p>
+                        {card.trend && (
+                          <div className="flex items-center gap-2">
                             <span className="text-xs text-gray-500">{card.trend}</span>
-                          )}
-                        </div>
-                      )}
-                    </div>
-                    <div className={`${colors.icon} p-3 rounded-xl`}>
-                      <Icon className={`w-6 h-6 ${colors.iconText}`} />
+                          </div>
+                        )}
+                      </div>
+                      <div className={`${colors.icon} p-3 rounded-xl`}>
+                        <Icon className={`w-6 h-6 ${colors.iconText}`} />
+                      </div>
                     </div>
                   </div>
                 </div>
-              </div>
-            );
-          })}
-      </div>
+              );
+            })}
+        </div>
+      ) : (
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
+          {statCards
+            .filter(card => card.visible)
+            .map((card) => {
+              const Icon = card.icon;
+              const colors = colorClasses[card.color as keyof typeof colorClasses];
+              
+              return (
+                <div
+                  key={card.title}
+                  className="card hover:shadow-md transition-shadow duration-200"
+                >
+                  <div className="p-6">
+                    <div className="flex items-start justify-between">
+                      <div className="space-y-3">
+                        <p className="text-sm font-medium text-gray-600">{card.title}</p>
+                        <p className="text-3xl font-bold text-gray-900">
+                          {(card as any).isText ? card.value : card.value.toLocaleString()}
+                        </p>
+                        {card.trend && (
+                          <div className="flex items-center gap-2">
+                            <span className={`inline-flex items-center gap-1 text-xs font-medium px-2 py-1 rounded-full ${colors.trendBg} ${colors.trend}`}>
+                              {card.trendUp ? (
+                                <ArrowUp className="w-3 h-3" />
+                              ) : (
+                                <ArrowDown className="w-3 h-3" />
+                              )}
+                              {card.trend}
+                            </span>
+                            <span className="text-xs text-gray-500">vs last period</span>
+                          </div>
+                        )}
+                      </div>
+                      <div className={`${colors.icon} p-3 rounded-xl`}>
+                        <Icon className={`w-6 h-6 ${colors.iconText}`} />
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              );
+            })}
+        </div>
+      )}
 
       {/* Active Period Details */}
       {stats?.activePeriod && (
@@ -299,29 +330,46 @@ const Dashboard = () => {
               </div>
             </div>
 
-            {/* Progress Bar */}
-            <div className="mt-6">
-              <div className="flex items-center justify-between mb-2">
-                <span className="text-sm font-medium text-gray-700">Selection Progress</span>
-                <span className="text-sm text-gray-600">
-                  {stats.completedSelections} of {stats.completedSelections + stats.pendingSelections} completed
-                </span>
+            {/* Progress Bar - Only show for admin */}
+            {user?.role !== 'Driver' && (
+              <div className="mt-6">
+                <div className="flex items-center justify-between mb-2">
+                  <span className="text-sm font-medium text-gray-700">Selection Progress</span>
+                  <span className="text-sm text-gray-600">
+                    {stats.completedSelections} of {stats.completedSelections + stats.pendingSelections} completed
+                  </span>
+                </div>
+                <div className="w-full bg-gray-200 rounded-full h-2">
+                  <div 
+                    className="bg-green-600 h-2 rounded-full transition-all duration-500"
+                    style={{ 
+                      width: `${(stats.completedSelections / (stats.completedSelections + stats.pendingSelections)) * 100}%` 
+                    }}
+                  />
+                </div>
               </div>
-              <div className="w-full bg-gray-200 rounded-full h-2">
-                <div 
-                  className="bg-green-600 h-2 rounded-full transition-all duration-500"
-                  style={{ 
-                    width: `${(stats.completedSelections / (stats.completedSelections + stats.pendingSelections)) * 100}%` 
-                  }}
-                />
+            )}
+
+            {/* Time remaining for drivers */}
+            {user?.role === 'Driver' && (
+              <div className="mt-6 p-4 bg-amber-50 border border-amber-200 rounded-lg">
+                <div className="flex items-center gap-3">
+                  <Clock className="w-5 h-5 text-amber-600" />
+                  <div>
+                    <p className="text-sm font-medium text-amber-900">Selection Period Closing Soon</p>
+                    <p className="text-xs text-amber-700 mt-1">
+                      Submit your route preferences before {new Date(stats.activePeriod.endDate).toLocaleDateString()}
+                    </p>
+                  </div>
+                </div>
               </div>
-            </div>
+            )}
           </div>
         </div>
       )}
 
       {/* Driver Quick Actions */}
-      {user?.role === 'DRIVER' && stats?.activePeriod && (
+      {user?.role === 'Driver' && stats?.activePeriod && (
         <div className="card">
           <div className="p-6">
             <h2 className="text-lg font-semibold text-gray-900 mb-4">Quick Actions</h2>
@@ -358,7 +406,7 @@ const Dashboard = () => {
       )}
 
       {/* Quick Actions */}
-      {user?.role !== 'DRIVER' && (
+      {user?.role !== 'Driver' && (
         <div>
           <h2 className="text-lg font-semibold text-gray-900 mb-4">Quick Actions</h2>
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
@@ -388,7 +436,7 @@ const Dashboard = () => {
       <div className="card">
         <div className="p-6 border-b border-gray-100">
           <h2 className="text-lg font-semibold text-gray-900">
-            {user?.role === 'DRIVER' ? 'My Recent Activity' : 'Recent Activity'}
+            {user?.role === 'Driver' ? 'My Recent Activity' : 'Recent Activity'}
           </h2>
         </div>
         <div className="p-6">
@@ -420,7 +468,7 @@ const Dashboard = () => {
             </div>
           ) : (
             <p className="text-sm text-gray-500 text-center py-4">
-              {user?.role === 'DRIVER' ? 'No recent activity to display' : 'No activity recorded yet'}
+              {user?.role === 'Driver' ? 'No recent activity to display' : 'No activity recorded yet'}
             </p>
           )}
         </div>

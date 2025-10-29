@@ -69,9 +69,7 @@ const Layout = () => {
           {/* Logo Section */}
           <div className="flex items-center justify-between p-6 border-b border-gray-100">
             <div className="flex items-center gap-3">
-              <div className="bg-primary-600 p-2 rounded-xl">
-                <Truck className="h-6 w-6 text-white" />
-              </div>
+              <img src="/logo.png" alt="CCFS Logo" className="h-12 w-auto" />
               <div>
                 <h2 className="text-xl font-bold text-gray-900">Route Select</h2>
                 <p className="text-xs text-gray-500">Management System</p>

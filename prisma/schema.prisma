@@ -72,17 +72,18 @@ model Route {
 }
 
 model SelectionPeriod {
-  id          String        @id @default(cuid())
-  name        String
-  description String?
-  startDate   DateTime
-  endDate     DateTime
-  status      String        @default("UPCOMING")
-  createdAt   DateTime      @default(now())
-  updatedAt   DateTime      @updatedAt
-  assignments Assignment[]
-  routes      PeriodRoute[]
-  selections  Selection[]
+  id                String        @id @default(cuid())
+  name              String
+  description       String?
+  startDate         DateTime
+  endDate           DateTime
+  status            String        @default("UPCOMING")
+  requiredSelections Int          @default(3)
+  createdAt         DateTime      @default(now())
+  updatedAt         DateTime      @updatedAt
+  assignments       Assignment[]
+  routes            PeriodRoute[]
+  selections        Selection[]
 
   @@map("selection_periods")
 }

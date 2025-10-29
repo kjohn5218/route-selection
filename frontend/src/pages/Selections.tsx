@@ -1,6 +1,6 @@
-import React, { useState } from 'react';
+import { useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { AlertCircle, CheckCircle, Route, Calendar, Clock, MapPin, Truck, AlertTriangle } from 'lucide-react';
+import { AlertCircle, CheckCircle, Route, Calendar, Clock, MapPin, Truck, AlertTriangle, Search } from 'lucide-react';
 import apiClient from '../api/client';
 import { useAuth } from '../contexts/AuthContext';
 
@@ -27,6 +27,7 @@ interface SelectionPeriod {
   startDate: string;
   endDate: string;
   status: string;
+  requiredSelections: number;
 }
 
 interface Selection {
@@ -53,6 +54,9 @@ const Selections = () => {
     secondChoiceId: null,
     thirdChoiceId: null,
   });
+  const [searchTerm, setSearchTerm] = useState('');
+  const [filterType, setFilterType] = useState<string>('ALL');
+  const [showListView, setShowListView] = useState(true);
 
   // Get active selection period
   const { data: activePeriod } = useQuery<SelectionPeriod | null>({
@@ -156,7 +160,7 @@ const Selections = () => {
   };
 
   // Admin view - show all selections
-  if (user?.role === 'ADMIN') {
+  if (user?.role === 'Admin') {
     return (
       <div>
         <h1 className="text-2xl font-bold text-gray-900 mb-6">Route Selections</h1>
@@ -300,7 +304,7 @@ const Selections = () => {
             { label: 'First Choice', route: currentSelection.firstChoice },
             { label: 'Second Choice', route: currentSelection.secondChoice },
             { label: 'Third Choice', route: currentSelection.thirdChoice },
-          ].map((choice, index) => (
+          ].slice(0, activePeriod?.requiredSelections || 3).map((choice, index) => (
             <div key={index} className="card">
               <div className="p-4">
                 <h3 className="font-medium text-gray-900 mb-2">{choice.label}</h3>
@@ -353,6 +357,18 @@ const Selections = () => {
       return !otherChoices.includes(route.id);
     });
   };
+
+  // Filter routes based on search and type
+  const filteredRoutes = availableRoutes.filter(route => {
+    const matchesSearch = searchTerm === '' || 
+      route.runNumber.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      route.origin.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      route.destination.toLowerCase().includes(searchTerm.toLowerCase());
+    
+    const matchesType = filterType === 'ALL' || route.type === filterType;
+    
+    return matchesSearch && matchesType;
+  });
 
   return (
     <div className="max-w-6xl mx-auto">
@@ -411,105 +427,305 @@ const Selections = () => {
         </div>
       )}
 
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 mb-8">
-        {[1, 2, 3].map((choiceNumber) => {
-          const key = `${['first', 'second', 'third'][choiceNumber - 1]}ChoiceId` as keyof typeof selectedChoices;
-          const selectedRouteId = selectedChoices[key];
-          const availableRoutesForChoice = getAvailableRoutesForChoice(choiceNumber as 1 | 2 | 3);
+      {/* View Toggle and Filters */}
+      <div className="mb-6 flex flex-col lg:flex-row gap-4">
+        <div className="flex-1 flex flex-col sm:flex-row gap-4">
+          <div className="flex-1 relative">
+            <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
+            <input
+              type="text"
+              placeholder="Search routes by number, origin, or destination..."
+              value={searchTerm}
+              onChange={(e) => setSearchTerm(e.target.value)}
+              className="form-input pl-10"
+            />
+          </div>
+          <select
+            value={filterType}
+            onChange={(e) => setFilterType(e.target.value)}
+            className="form-select w-full sm:w-48"
+          >
+            <option value="ALL">All Types</option>
+            <option value="LOCAL">Local</option>
+            <option value="REGIONAL">Regional</option>
+            <option value="LONG_HAUL">Long Haul</option>
+            <option value="DEDICATED">Dedicated</option>
+            <option value="DOUBLES">Doubles</option>
+          </select>
+        </div>
+        <div className="flex gap-2">
+          <button
+            onClick={() => setShowListView(!showListView)}
+            className="btn-secondary"
+          >
+            {showListView ? 'Selection View' : 'List View'}
+          </button>
+        </div>
+      </div>
 
-          return (
-            <div key={choiceNumber} className="card">
-              <div className="p-6">
-                <h3 className="font-semibold text-gray-900 mb-4">
-                  {['First', 'Second', 'Third'][choiceNumber - 1]} Choice
-                </h3>
-                
-                <select
-                  className="form-select mb-4"
-                  value={selectedRouteId || ''}
-                  onChange={(e) => handleChoiceSelect(choiceNumber as 1 | 2 | 3, e.target.value || null)}
-                  disabled={routesLoading}
-                >
-                  <option value="">Select a route...</option>
-                  {availableRoutesForChoice.map((route) => (
-                    <option key={route.id} value={route.id}>
-                      #{route.runNumber} - {route.origin} → {route.destination}
-                      {route.requiresDoublesEndorsement && ' (Doubles Required)'}
-                      {route.requiresChainExperience && ' (Chains Required)'}
-                    </option>
-                  ))}
-                </select>
+      {/* Available Routes Summary */}
+      <div className="mb-6 bg-primary-50 border border-primary-200 rounded-lg p-4">
+        <div className="flex items-center justify-between">
+          <div className="flex items-center gap-3">
+            <Route className="w-5 h-5 text-primary-600" />
+            <div>
+              <p className="font-semibold text-primary-900">
+                {filteredRoutes.length} Available Routes
+              </p>
+              <p className="text-sm text-primary-700">
+                {selectedRouteIds.length > 0 
+                  ? `${selectedRouteIds.length} route${selectedRouteIds.length > 1 ? 's' : ''} selected`
+                  : `Select ${activePeriod?.requiredSelections === 1 ? '1 route' : `up to ${activePeriod?.requiredSelections || 3} routes`} in order of preference`}
+              </p>
+            </div>
+          </div>
+          {selectedRouteIds.length > 0 && selectedRouteIds.length < (activePeriod?.requiredSelections || 3) && (
+            <span className="text-sm text-primary-600 font-medium">
+              {(activePeriod?.requiredSelections || 3) - selectedRouteIds.length} selection{(activePeriod?.requiredSelections || 3) - selectedRouteIds.length !== 1 ? 's' : ''} remaining
+            </span>
+          )}
+        </div>
+      </div>
 
-                {selectedRouteId && (
-                  <div className="border-t pt-4">
-                    {(() => {
-                      const route = availableRoutes.find(r => r.id === selectedRouteId);
-                      if (!route) return null;
-
-                      const RateIcon = getRateTypeIcon(route.rateType);
-
+      {/* List View */}
+      {showListView ? (
+        <div className="mb-8">
+          <div className="card">
+            <div className="overflow-x-auto">
+              <table className="min-w-full divide-y divide-gray-200">
+                <thead className="bg-gray-50">
+                  <tr>
+                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                      Route
+                    </th>
+                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                      Type
+                    </th>
+                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                      Origin/Destination
+                    </th>
+                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                      Schedule
+                    </th>
+                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                      Details
+                    </th>
+                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                      Selection
+                    </th>
+                  </tr>
+                </thead>
+                <tbody className="bg-white divide-y divide-gray-200">
+                  {filteredRoutes.length === 0 ? (
+                    <tr>
+                      <td colSpan={6} className="px-6 py-12 text-center text-gray-500">
+                        No routes found matching your criteria
+                      </td>
+                    </tr>
+                  ) : (
+                    filteredRoutes.map((route) => {
+                      const isSelected = selectedRouteIds.includes(route.id);
+                      const choiceNumber = selectedChoices.firstChoiceId === route.id ? 1 
+                        : selectedChoices.secondChoiceId === route.id ? 2 
+                        : selectedChoices.thirdChoiceId === route.id ? 3 
+                        : null;
+                      
                       return (
-                        <div className="space-y-3">
-                          <div className="flex items-center justify-between">
-                            <span className="font-medium">#{route.runNumber}</span>
+                        <tr key={route.id} className={isSelected ? 'bg-primary-50' : 'hover:bg-gray-50'}>
+                          <td className="px-6 py-4 whitespace-nowrap">
+                            <div className="text-sm font-medium text-gray-900">#{route.runNumber}</div>
+                          </td>
+                          <td className="px-6 py-4 whitespace-nowrap">
                             <span className={`px-2 py-1 rounded-full text-xs font-medium ${getRouteTypeColor(route.type)}`}>
                               {route.type.replace('_', ' ')}
                             </span>
-                          </div>
-                          
-                          <div className="space-y-2 text-sm">
-                            <div className="flex items-center gap-2 text-gray-600">
-                              <MapPin className="w-4 h-4" />
-                              <span>{route.origin} → {route.destination}</span>
+                          </td>
+                          <td className="px-6 py-4">
+                            <div className="text-sm text-gray-900">{route.origin}</div>
+                            <div className="text-sm text-gray-500">→ {route.destination}</div>
+                          </td>
+                          <td className="px-6 py-4">
+                            <div className="text-sm text-gray-900">{route.days}</div>
+                            <div className="text-sm text-gray-500">{route.startTime} - {route.endTime}</div>
+                          </td>
+                          <td className="px-6 py-4">
+                            <div className="text-sm text-gray-900">
+                              {route.distance} mi • {route.workTime}h • {route.rateType}
                             </div>
-                            
-                            <div className="flex items-center gap-2 text-gray-600">
-                              <Clock className="w-4 h-4" />
-                              <span>{route.days}</span>
-                            </div>
-                            
-                            <div className="flex items-center gap-2 text-gray-600">
-                              <Clock className="w-4 h-4" />
-                              <span>{route.startTime} - {route.endTime}</span>
-                            </div>
-                            
-                            <div className="flex items-center gap-2 text-gray-600">
-                              <RateIcon className="w-4 h-4" />
-                              <span>{route.rateType} ({route.workTime}h)</span>
-                            </div>
-                            
-                            <div className="flex items-center gap-2 text-gray-600">
-                              <Truck className="w-4 h-4" />
-                              <span>{route.distance} miles</span>
-                            </div>
-                          </div>
-
-                          {(route.requiresDoublesEndorsement || route.requiresChainExperience) && (
-                            <div className="border-t pt-3 space-y-1">
-                              {route.requiresDoublesEndorsement && (
-                                <div className="flex items-center gap-2 text-amber-600 text-sm">
-                                  <AlertTriangle className="w-4 h-4" />
-                                  <span>Doubles endorsement required</span>
-                                </div>
-                              )}
-                              {route.requiresChainExperience && (
-                                <div className="flex items-center gap-2 text-amber-600 text-sm">
-                                  <AlertTriangle className="w-4 h-4" />
-                                  <span>Chain experience required</span>
-                                </div>
-                              )}
-                            </div>
-                          )}
-                        </div>
+                            {(route.requiresDoublesEndorsement || route.requiresChainExperience) && (
+                              <div className="flex gap-2 mt-1">
+                                {route.requiresDoublesEndorsement && (
+                                  <span className="text-xs text-amber-600 font-medium">Doubles</span>
+                                )}
+                                {route.requiresChainExperience && (
+                                  <span className="text-xs text-amber-600 font-medium">Chains</span>
+                                )}
+                              </div>
+                            )}
+                          </td>
+                          <td className="px-6 py-4 whitespace-nowrap">
+                            {isSelected ? (
+                              <span className="inline-flex items-center px-3 py-1 rounded-full text-xs font-medium bg-primary-600 text-white">
+                                Choice #{choiceNumber}
+                              </span>
+                            ) : (
+                              <select
+                                className="form-select text-sm"
+                                value=""
+                                onChange={(e) => handleChoiceSelect(parseInt(e.target.value) as 1 | 2 | 3, route.id)}
+                                disabled={selectedRouteIds.length >= (activePeriod?.requiredSelections || 3)}
+                              >
+                                <option value="">Select as...</option>
+                                {!selectedChoices.firstChoiceId && <option value="1">1st Choice</option>}
+                                {!selectedChoices.secondChoiceId && activePeriod?.requiredSelections && activePeriod.requiredSelections >= 2 && <option value="2">2nd Choice</option>}
+                                {!selectedChoices.thirdChoiceId && activePeriod?.requiredSelections && activePeriod.requiredSelections >= 3 && <option value="3">3rd Choice</option>}
+                              </select>
+                            )}
+                          </td>
+                        </tr>
                       );
-                    })()}
-                  </div>
-                )}
-              </div>
+                    })
+                  )}
+                </tbody>
+              </table>
             </div>
-          );
-        })}
-      </div>
+          </div>
+
+          {/* Selected Routes Summary */}
+          {selectedRouteIds.length > 0 && (
+            <div className={`mt-6 grid grid-cols-1 ${activePeriod?.requiredSelections === 1 ? '' : activePeriod?.requiredSelections === 2 ? 'md:grid-cols-2' : 'md:grid-cols-3'} gap-4`}>
+              {Array.from({ length: activePeriod?.requiredSelections || 3 }, (_, i) => i + 1).map((num) => {
+                const key = `${['first', 'second', 'third'][num - 1]}ChoiceId` as keyof typeof selectedChoices;
+                const routeId = selectedChoices[key];
+                const route = routeId ? availableRoutes.find(r => r.id === routeId) : null;
+                
+                return (
+                  <div key={num} className="card p-4">
+                    <h4 className="font-medium text-gray-900 mb-2">
+                      {['First', 'Second', 'Third'][num - 1]} Choice
+                    </h4>
+                    {route ? (
+                      <div className="space-y-1">
+                        <p className="text-sm font-medium">#{route.runNumber}</p>
+                        <p className="text-sm text-gray-600">{route.origin} → {route.destination}</p>
+                        <button
+                          onClick={() => handleChoiceSelect(num as 1 | 2 | 3, null)}
+                          className="text-xs text-red-600 hover:text-red-700 font-medium mt-2"
+                        >
+                          Remove Selection
+                        </button>
+                      </div>
+                    ) : (
+                      <p className="text-sm text-gray-500 italic">Not selected</p>
+                    )}
+                  </div>
+                );
+              })}
+            </div>
+          )}
+        </div>
+      ) : (
+        /* Selection View (Original Grid) */
+        <div className={`grid grid-cols-1 ${activePeriod?.requiredSelections === 1 ? '' : activePeriod?.requiredSelections === 2 ? 'lg:grid-cols-2' : 'lg:grid-cols-3'} gap-6 mb-8`}>
+          {Array.from({ length: activePeriod?.requiredSelections || 3 }, (_, i) => i + 1).map((choiceNumber) => {
+            const key = `${['first', 'second', 'third'][choiceNumber - 1]}ChoiceId` as keyof typeof selectedChoices;
+            const selectedRouteId = selectedChoices[key];
+            const availableRoutesForChoice = getAvailableRoutesForChoice(choiceNumber as 1 | 2 | 3);
+
+            return (
+              <div key={choiceNumber} className="card">
+                <div className="p-6">
+                  <h3 className="font-semibold text-gray-900 mb-4">
+                    {['First', 'Second', 'Third'][choiceNumber - 1]} Choice
+                  </h3>
+                  
+                  <select
+                    className="form-select mb-4"
+                    value={selectedRouteId || ''}
+                    onChange={(e) => handleChoiceSelect(choiceNumber as 1 | 2 | 3, e.target.value || null)}
+                    disabled={routesLoading}
+                  >
+                    <option value="">Select a route...</option>
+                    {availableRoutesForChoice.map((route) => (
+                      <option key={route.id} value={route.id}>
+                        #{route.runNumber} - {route.origin} → {route.destination}
+                        {route.requiresDoublesEndorsement && ' (Doubles Required)'}
+                        {route.requiresChainExperience && ' (Chains Required)'}
+                      </option>
+                    ))}
+                  </select>
+
+                  {selectedRouteId && (
+                    <div className="border-t pt-4">
+                      {(() => {
+                        const route = availableRoutes.find(r => r.id === selectedRouteId);
+                        if (!route) return null;
+
+                        const RateIcon = getRateTypeIcon(route.rateType);
+
+                        return (
+                          <div className="space-y-3">
+                            <div className="flex items-center justify-between">
+                              <span className="font-medium">#{route.runNumber}</span>
+                              <span className={`px-2 py-1 rounded-full text-xs font-medium ${getRouteTypeColor(route.type)}`}>
+                                {route.type.replace('_', ' ')}
+                              </span>
+                            </div>
+                            
+                            <div className="space-y-2 text-sm">
+                              <div className="flex items-center gap-2 text-gray-600">
+                                <MapPin className="w-4 h-4" />
+                                <span>{route.origin} → {route.destination}</span>
+                              </div>
+                              
+                              <div className="flex items-center gap-2 text-gray-600">
+                                <Clock className="w-4 h-4" />
+                                <span>{route.days}</span>
+                              </div>
+                              
+                              <div className="flex items-center gap-2 text-gray-600">
+                                <Clock className="w-4 h-4" />
+                                <span>{route.startTime} - {route.endTime}</span>
+                              </div>
+                              
+                              <div className="flex items-center gap-2 text-gray-600">
+                                <RateIcon className="w-4 h-4" />
+                                <span>{route.rateType} ({route.workTime}h)</span>
+                              </div>
+                              
+                              <div className="flex items-center gap-2 text-gray-600">
+                                <Truck className="w-4 h-4" />
+                                <span>{route.distance} miles</span>
+                              </div>
+                            </div>
+
+                            {(route.requiresDoublesEndorsement || route.requiresChainExperience) && (
+                              <div className="border-t pt-3 space-y-1">
+                                {route.requiresDoublesEndorsement && (
+                                  <div className="flex items-center gap-2 text-amber-600 text-sm">
+                                    <AlertTriangle className="w-4 h-4" />
+                                    <span>Doubles endorsement required</span>
+                                  </div>
+                                )}
+                                {route.requiresChainExperience && (
+                                  <div className="flex items-center gap-2 text-amber-600 text-sm">
+                                    <AlertTriangle className="w-4 h-4" />
+                                    <span>Chain experience required</span>
+                                  </div>
+                                )}
+                              </div>
+                            )}
+                          </div>
+                        );
+                      })()}
+                    </div>
+                  )}
+                </div>
+              </div>
+            );
+          })}
+        </div>
+      )}
 
       <div className="flex justify-end">
         <button
