@@ -15,7 +15,13 @@ const createPeriodSchema = z.object({
   requiredSelections: z.number().min(1).max(3).optional().default(3),
 });
 
-const updatePeriodSchema = createPeriodSchema.partial().extend({
+const updatePeriodSchema = z.object({
+  name: z.string().min(1, 'Name is required').optional(),
+  description: z.string().optional(),
+  startDate: z.string().regex(/^\d{4}-\d{2}-\d{2}$/, 'Date must be in YYYY-MM-DD format').optional(),
+  endDate: z.string().regex(/^\d{4}-\d{2}-\d{2}$/, 'Date must be in YYYY-MM-DD format').optional(),
+  routeIds: z.array(z.string()).optional(),
+  requiredSelections: z.number().min(1).max(3).optional(),
   status: z.enum(['UPCOMING', 'OPEN', 'CLOSED', 'PROCESSING', 'COMPLETED']).optional(),
 });
 

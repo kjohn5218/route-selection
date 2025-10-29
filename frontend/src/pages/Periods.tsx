@@ -674,6 +674,30 @@ const Periods = () => {
               </div>
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-2">Available Routes</label>
+                {allRoutes.length > 0 && (
+                  <div className="mb-2">
+                    <label className="flex items-center gap-2 cursor-pointer p-2 bg-gray-50 rounded-lg hover:bg-gray-100">
+                      <input
+                        type="checkbox"
+                        checked={formData.routeIds?.length === allRoutes.length}
+                        ref={(el) => {
+                          if (el) {
+                            el.indeterminate = formData.routeIds && formData.routeIds.length > 0 && formData.routeIds.length < allRoutes.length;
+                          }
+                        }}
+                        onChange={(e) => {
+                          if (e.target.checked) {
+                            setFormData({ ...formData, routeIds: allRoutes.map(r => r.id) });
+                          } else {
+                            setFormData({ ...formData, routeIds: [] });
+                          }
+                        }}
+                        className="text-primary-600 rounded focus:ring-primary-500"
+                      />
+                      <span className="text-sm font-medium">Select All Routes ({allRoutes.length})</span>
+                    </label>
+                  </div>
+                )}
                 <div className="border rounded-lg p-3 max-h-48 overflow-y-auto space-y-2">
                   {allRoutes.length === 0 ? (
                     <p className="text-sm text-gray-500">No active routes available</p>
@@ -700,7 +724,7 @@ const Periods = () => {
                   )}
                 </div>
                 <p className="text-xs text-gray-500 mt-1">
-                  Select which routes will be available for this selection period
+                  {formData.routeIds?.length || 0} of {allRoutes.length} routes selected for this selection period
                 </p>
               </div>
               <div className="flex gap-3 justify-end mt-6">
@@ -805,6 +829,30 @@ const Periods = () => {
               </div>
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-2">Available Routes</label>
+                {allRoutes.length > 0 && (
+                  <div className="mb-2">
+                    <label className="flex items-center gap-2 cursor-pointer p-2 bg-gray-50 rounded-lg hover:bg-gray-100">
+                      <input
+                        type="checkbox"
+                        checked={formData.routeIds?.length === allRoutes.length}
+                        ref={(el) => {
+                          if (el) {
+                            el.indeterminate = formData.routeIds && formData.routeIds.length > 0 && formData.routeIds.length < allRoutes.length;
+                          }
+                        }}
+                        onChange={(e) => {
+                          if (e.target.checked) {
+                            setFormData({ ...formData, routeIds: allRoutes.map(r => r.id) });
+                          } else {
+                            setFormData({ ...formData, routeIds: [] });
+                          }
+                        }}
+                        className="text-primary-600 rounded focus:ring-primary-500"
+                      />
+                      <span className="text-sm font-medium">Select All Routes ({allRoutes.length})</span>
+                    </label>
+                  </div>
+                )}
                 <div className="border rounded-lg p-3 max-h-48 overflow-y-auto space-y-2">
                   {allRoutes.length === 0 ? (
                     <p className="text-sm text-gray-500">No active routes available</p>
@@ -831,7 +879,7 @@ const Periods = () => {
                   )}
                 </div>
                 <p className="text-xs text-gray-500 mt-1">
-                  Select which routes will be available for this selection period
+                  {formData.routeIds?.length || 0} of {allRoutes.length} routes selected for this selection period
                 </p>
               </div>
               <div className="bg-yellow-50 p-4 rounded-lg">
