@@ -358,7 +358,7 @@ router.put('/:id', authenticateToken, requireAdmin, async (req: Request, res: Re
 
     // Only include fields that are provided
     if (data.name !== undefined) updateData.name = data.name;
-    if (data.description !== undefined) updateData.description = data.description === '' ? null : data.description;
+    if (data.description !== undefined) updateData.description = data.description || '';
     if (data.requiredSelections !== undefined) updateData.requiredSelections = data.requiredSelections;
     if (data.status !== undefined) updateData.status = data.status;
     
@@ -375,7 +375,7 @@ router.put('/:id', authenticateToken, requireAdmin, async (req: Request, res: Re
       });
 
       // If routeIds are provided, update the routes
-      if (data.routeIds !== undefined) {
+      if (data.routeIds !== undefined && data.routeIds !== null) {
         // Validate that all route IDs exist
         if (data.routeIds.length > 0) {
           const existingRoutes = await tx.route.findMany({

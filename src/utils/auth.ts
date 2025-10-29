@@ -4,6 +4,7 @@ import { JwtPayload } from '../types/index.js';
 
 const JWT_SECRET = process.env.JWT_SECRET || 'fallback-secret-key';
 const JWT_EXPIRES_IN = process.env.JWT_EXPIRES_IN || '7d';
+const JWT_EXPIRES_IN_STR = String(JWT_EXPIRES_IN);
 
 export const hashPassword = async (password: string): Promise<string> => {
   const saltRounds = 12;
@@ -15,7 +16,8 @@ export const comparePassword = async (password: string, hashedPassword: string):
 };
 
 export const generateToken = (payload: JwtPayload): string => {
-  return jwt.sign(payload, JWT_SECRET, { expiresIn: JWT_EXPIRES_IN });
+  const options: jwt.SignOptions = { expiresIn: JWT_EXPIRES_IN_STR };
+  return jwt.sign(payload, JWT_SECRET, options);
 };
 
 export const verifyToken = (token: string): JwtPayload => {

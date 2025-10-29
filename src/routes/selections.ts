@@ -281,7 +281,7 @@ router.post('/', authenticateToken, async (req: Request, res: Response) => {
     }
 
     // Validate that choices are different and routes exist
-    const choiceIds = [data.firstChoiceId, data.secondChoiceId, data.thirdChoiceId].filter(Boolean);
+    const choiceIds = [data.firstChoiceId, data.secondChoiceId, data.thirdChoiceId].filter((id): id is string => id !== null && id !== undefined);
     const uniqueChoiceIds = new Set(choiceIds);
     
     // Validate number of selections doesn't exceed the period's requirement
@@ -427,7 +427,7 @@ router.put('/:id', authenticateToken, async (req: Request, res: Response) => {
     }
 
     // Validate choices if provided
-    const choiceIds = [data.firstChoiceId, data.secondChoiceId, data.thirdChoiceId].filter(Boolean);
+    const choiceIds = [data.firstChoiceId, data.secondChoiceId, data.thirdChoiceId].filter((id): id is string => id !== null && id !== undefined);
     const uniqueChoiceIds = new Set(choiceIds);
     
     // Validate number of selections doesn't exceed the period's requirement

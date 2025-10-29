@@ -265,21 +265,23 @@ router.post('/', authenticateToken, requireAdmin, async (req: Request, res: Resp
     }
 
     // Normalize route types from import
-    if (data.type === 'Doubles') {
+    const typeInput = data.type as any;
+    if (typeInput === 'Doubles') {
       data.type = 'DOUBLES';
-    } else if (data.type === 'Singles') {
+    } else if (typeInput === 'Singles') {
       data.type = 'SINGLES';
     }
 
     // Normalize rate types from import
-    if (data.rateType === 'Miles') {
+    const rateTypeInput = data.rateType as any;
+    if (rateTypeInput === 'Miles') {
       data.rateType = 'MILEAGE';
-    } else if (data.rateType === 'Salary') {
+    } else if (rateTypeInput === 'Salary') {
       data.rateType = 'FLAT_RATE';
     }
 
     // Automatically set requiresDoublesEndorsement for doubles routes
-    if (data.type === 'doubles' || data.type === 'DOUBLES') {
+    if (data.type === 'DOUBLES') {
       data.requiresDoublesEndorsement = true;
     }
 
@@ -323,21 +325,23 @@ router.put('/:id', authenticateToken, requireAdmin, async (req: Request, res: Re
     }
 
     // Normalize route types from import
-    if (data.type === 'Doubles') {
+    const typeInput = data.type as any;
+    if (typeInput === 'Doubles') {
       data.type = 'DOUBLES';
-    } else if (data.type === 'Singles') {
+    } else if (typeInput === 'Singles') {
       data.type = 'SINGLES';
     }
 
     // Normalize rate types from import
-    if (data.rateType === 'Miles') {
+    const rateTypeInput = data.rateType as any;
+    if (rateTypeInput === 'Miles') {
       data.rateType = 'MILEAGE';
-    } else if (data.rateType === 'Salary') {
+    } else if (rateTypeInput === 'Salary') {
       data.rateType = 'FLAT_RATE';
     }
 
     // Automatically set requiresDoublesEndorsement for doubles routes
-    if (data.type === 'doubles' || data.type === 'DOUBLES') {
+    if (data.type === 'DOUBLES') {
       data.requiresDoublesEndorsement = true;
     }
 

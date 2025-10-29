@@ -450,18 +450,6 @@ const Selections = () => {
               className="form-input pl-10"
             />
           </div>
-          <select
-            value={filterType}
-            onChange={(e) => setFilterType(e.target.value)}
-            className="form-select w-full sm:w-48"
-          >
-            <option value="ALL">All Types</option>
-            <option value="LOCAL">Local</option>
-            <option value="REGIONAL">Regional</option>
-            <option value="LONG_HAUL">Long Haul</option>
-            <option value="DEDICATED">Dedicated</option>
-            <option value="DOUBLES">Doubles</option>
-          </select>
         </div>
         <div className="flex gap-2">
           <button

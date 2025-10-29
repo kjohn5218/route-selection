@@ -10,7 +10,7 @@ router.get('/stats', authenticateToken, async (req: AuthRequest, res: Response) 
   try {
     // Get total employees (only for admin/manager)
     let totalEmployees = 0;
-    if (req.user?.role !== 'Driver') {
+    if (req.user?.role === 'ADMIN') {
       totalEmployees = await prisma.employee.count();
     }
 
@@ -20,7 +20,7 @@ router.get('/stats', authenticateToken, async (req: AuthRequest, res: Response) 
     // Get active period
     const activePeriod = await prisma.selectionPeriod.findFirst({
       where: {
-        status: 'Active',
+        status: 'OPEN',
       },
       select: {
         id: true,
@@ -35,34 +35,40 @@ router.get('/stats', authenticateToken, async (req: AuthRequest, res: Response) 
     let completedSelections = 0;
 
     if (activePeriod) {
-      if (req.user?.role === 'Driver') {
+      if (req.user?.role === 'DRIVER') {
         // For drivers, only show their own selections
-        const selections = await prisma.selection.findMany({
+        const selection = await prisma.selection.findFirst({
           where: {
-            periodId: activePeriod.id,
+            selectionPeriodId: activePeriod.id,
             employeeId: req.user.employeeId || '',
           },
         });
         
-        pendingSelections = selections.filter(s => s.status === 'Pending').length;
-        completedSelections = selections.filter(s => s.status === 'Confirmed').length;
+        // If driver has submitted a selection, it's completed; otherwise it's pending
+        if (selection) {
+          completedSelections = 1;
+          pendingSelections = 0;
+        } else {
+          completedSelections = 0;
+          pendingSelections = 1;
+        }
       } else {
-        // For admin/manager, show all selections
-        const selectionCounts = await prisma.selection.groupBy({
-          by: ['status'],
+        // For admin/manager, count all selections for the active period
+        const totalSelections = await prisma.selection.count({
           where: {
-            periodId: activePeriod.id,
+            selectionPeriodId: activePeriod.id,
           },
-          _count: true,
         });
-
-        selectionCounts.forEach(count => {
-          if (count.status === 'Pending') {
-            pendingSelections = count._count;
-          } else if (count.status === 'Confirmed') {
-            completedSelections = count._count;
-          }
+        
+        // For admin view, we'll show all submitted selections as completed
+        completedSelections = totalSelections;
+        
+        // Count eligible employees who haven't submitted
+        const eligibleEmployees = await prisma.employee.count({
+          where: { isEligible: true },
         });
+        
+        pendingSelections = Math.max(0, eligibleEmployees - totalSelections);
       }
     }
 
@@ -101,8 +107,14 @@ router.get('/activity', authenticateToken, async (req: AuthRequest, res: Respons
       include: {
         user: {
           select: {
-            name: true,
+            email: true,
             role: true,
+            employee: {
+              select: {
+                firstName: true,
+                lastName: true,
+              },
+            },
           },
         },
       },
@@ -115,7 +127,9 @@ router.get('/activity', authenticateToken, async (req: AuthRequest, res: Respons
       resource: activity.resource,
       details: activity.details,
       timestamp: activity.timestamp,
-      user: activity.user?.name || 'Unknown User',
+      user: activity.user?.employee ? 
+        `${activity.user.employee.firstName} ${activity.user.employee.lastName}` : 
+        activity.user?.email || 'Unknown User',
       userRole: activity.user?.role || 'Unknown',
     }));
     
