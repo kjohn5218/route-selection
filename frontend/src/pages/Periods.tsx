@@ -60,7 +60,7 @@ const Periods = () => {
   const [formData, setFormData] = useState<PeriodFormData>({
     name: '',
     description: '',
-    startDate: '',
+    startDate: new Date().toISOString().split('T')[0],
     endDate: '',
     routeIds: [],
     requiredSelections: 3,
@@ -189,7 +189,7 @@ const Periods = () => {
     setFormData({
       name: '',
       description: '',
-      startDate: '',
+      startDate: new Date().toISOString().split('T')[0],
       endDate: '',
       routeIds: [],
       requiredSelections: 3,
