@@ -115,8 +115,8 @@ router.get('/activity', authenticateToken, async (req: AuthRequest, res: Respons
       resource: activity.resource,
       details: activity.details,
       timestamp: activity.timestamp,
-      user: activity.user.name,
-      userRole: activity.user.role,
+      user: activity.user?.name || 'Unknown User',
+      userRole: activity.user?.role || 'Unknown',
     }));
     
     res.json(formattedActivities);

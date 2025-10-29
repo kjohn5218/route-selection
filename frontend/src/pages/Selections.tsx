@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { AlertCircle, CheckCircle, Route, Calendar, Clock, MapPin, Truck, AlertTriangle, Search } from 'lucide-react';
 import apiClient from '../api/client';
@@ -81,8 +81,12 @@ const Selections = () => {
     enabled: !!activePeriod?.id && activePeriod.status === 'OPEN',
   });
 
-  console.log('Available routes query enabled:', !!activePeriod?.id && activePeriod?.status === 'OPEN');
-  console.log('Active period:', activePeriod);
+  // Debug logging
+  useEffect(() => {
+    console.log('Available routes query enabled:', !!activePeriod?.id && activePeriod?.status === 'OPEN');
+    console.log('Active period:', activePeriod);
+    console.log('Available routes:', availableRoutes);
+  }, [activePeriod, availableRoutes]);
 
   // Get current selection
   const { data: currentSelection } = useQuery<Selection | null>({
