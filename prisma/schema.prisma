@@ -7,17 +7,34 @@ datasource db {
   url      = "file:./dev.db"
 }
 
+model Terminal {
+  id          String              @id @default(cuid())
+  code        String              @unique
+  name        String
+  isActive    Boolean             @default(true)
+  createdAt   DateTime            @default(now())
+  updatedAt   DateTime            @updatedAt
+  users       User[]
+  employees   Employee[]
+  routes      Route[]
+  periods     SelectionPeriod[]
+
+  @@map("terminals")
+}
+
 model User {
-  id        String    @id @default(cuid())
-  email     String    @unique
-  password  String
-  role      String    @default("DRIVER")
-  isActive  Boolean   @default(true)
-  createdAt DateTime  @default(now())
-  updatedAt DateTime  @updatedAt
-  employee  Employee?
+  id         String     @id @default(cuid())
+  email      String     @unique
+  password   String
+  role       String     @default("DRIVER")
+  isActive   Boolean    @default(true)
+  terminalId String?
+  createdAt  DateTime   @default(now())
+  updatedAt  DateTime   @updatedAt
+  employee   Employee?
+  terminal   Terminal?  @relation(fields: [terminalId], references: [id])
   passwordResetTokens PasswordResetToken[]
-  auditLogs AuditLog[]
+  auditLogs  AuditLog[]
 
   @@map("users")
 }
@@ -34,12 +51,14 @@ model Employee {
   chainExperience    Boolean            @default(false)
   isEligible         Boolean            @default(true)
   currentRouteId     String?
+  terminalId         String
   createdAt          DateTime           @default(now())
   updatedAt          DateTime           @updatedAt
   assignments        Assignment[]
   disqualifications  Disqualification[]
   route              Route?             @relation("CurrentAssignment", fields: [currentRouteId], references: [id])
   user               User               @relation(fields: [email], references: [email])
+  terminal           Terminal           @relation(fields: [terminalId], references: [id])
   selections         Selection[]
 
   @@map("employees")
@@ -47,7 +66,7 @@ model Employee {
 
 model Route {
   id                         String        @id @default(cuid())
-  runNumber                  String        @unique
+  runNumber                  String        
   type                       String
   origin                     String
   destination                String
@@ -60,8 +79,10 @@ model Route {
   requiresDoublesEndorsement Boolean       @default(false)
   requiresChainExperience    Boolean       @default(false)
   isActive                   Boolean       @default(true)
+  terminalId                 String
   createdAt                  DateTime      @default(now())
   updatedAt                  DateTime      @updatedAt
+  terminal                   Terminal      @relation(fields: [terminalId], references: [id])
   assignments                Assignment[]
   currentEmployees           Employee[]    @relation("CurrentAssignment")
   periodRoutes               PeriodRoute[]
@@ -69,6 +90,7 @@ model Route {
   secondChoiceSelections     Selection[]   @relation("SecondChoice")
   firstChoiceSelections      Selection[]   @relation("FirstChoice")
 
+  @@unique([runNumber, terminalId])
   @@map("routes")
 }
 
@@ -80,8 +102,10 @@ model SelectionPeriod {
   endDate           DateTime
   status            String        @default("UPCOMING")
   requiredSelections Int          @default(3)
+  terminalId        String
   createdAt         DateTime      @default(now())
   updatedAt         DateTime      @updatedAt
+  terminal          Terminal      @relation(fields: [terminalId], references: [id])
   assignments       Assignment[]
   routes            PeriodRoute[]
   selections        Selection[]

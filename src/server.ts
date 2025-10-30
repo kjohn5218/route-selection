@@ -17,6 +17,7 @@ import importRoutes from './routes/import.js';
 import exportRoutes from './routes/export.js';
 import passwordResetRoutes from './routes/passwordReset.js';
 import userRoutes from './routes/users.js';
+import terminalRoutes from './routes/terminals.js';
 
 const app = express();
 const PORT = process.env.PORT || 3001;
@@ -54,6 +55,7 @@ app.use('/api/import', importRoutes);
 app.use('/api/export', exportRoutes);
 app.use('/api/password-reset', passwordResetRoutes);
 app.use('/api/users', userRoutes);
+app.use('/api/terminals', terminalRoutes);
 
 // Error handling middleware
 app.use((err: Error, req: express.Request, res: express.Response, next: express.NextFunction) => {
