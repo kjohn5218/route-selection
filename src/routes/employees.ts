@@ -280,7 +280,7 @@ router.post('/', authenticateToken, requireAdmin, async (req: Request, res: Resp
           email: data.email,
           password: defaultPassword,
           role: 'DRIVER',
-          isActive: data.isEligible ?? true,
+          isActive: true, // All new user accounts are active by default
         },
       });
     }
@@ -382,13 +382,8 @@ router.put('/:id', authenticateToken, requireAdmin, async (req: Request, res: Re
       },
     });
 
-    // If isEligible status changed and user account exists, update user account status
-    if (data.isEligible !== undefined && data.isEligible !== existingEmployee.isEligible && employee.user) {
-      await prisma.user.update({
-        where: { id: employee.user.id },
-        data: { isActive: data.isEligible },
-      });
-    }
+    // Note: We do NOT automatically disable user accounts when employees become ineligible
+    // Ineligible employees can still log in but cannot participate in route selection
 
     res.json(employee);
   } catch (error) {
@@ -470,19 +465,14 @@ router.post('/:id/disqualify', authenticateToken, requireAdmin, async (req: Requ
       },
     });
 
-    // Update employee eligibility and disable user account if exists
+    // Update employee eligibility
     await prisma.employee.update({
       where: { id: req.params.id },
       data: { isEligible: false },
     });
 
-    // Disable user account if exists
-    if (employee.email) {
-      await prisma.user.update({
-        where: { email: employee.email },
-        data: { isActive: false },
-      });
-    }
+    // Note: We do NOT disable user accounts for disqualified employees
+    // They can still log in but cannot participate in route selection
 
     res.status(201).json(disqualification);
   } catch (error) {
