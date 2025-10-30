@@ -41,6 +41,11 @@ router.post('/login', async (req: Request, res: Response) => {
       return res.status(401).json({ error: 'Invalid email or password' });
     }
 
+    // Check if user account is active
+    if (!user.isActive) {
+      return res.status(403).json({ error: 'Your account has been disabled. Please contact your administrator.' });
+    }
+
     const token = generateToken({
       userId: user.id,
       email: user.email,

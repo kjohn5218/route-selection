@@ -280,6 +280,7 @@ router.post('/', authenticateToken, requireAdmin, async (req: Request, res: Resp
           email: data.email,
           password: defaultPassword,
           role: 'DRIVER',
+          isActive: data.isEligible ?? true,
         },
       });
     }
@@ -369,7 +370,25 @@ router.put('/:id', authenticateToken, requireAdmin, async (req: Request, res: Re
     const employee = await prisma.employee.update({
       where: { id: req.params.id },
       data: updateData,
+      include: {
+        user: {
+          select: {
+            id: true,
+            email: true,
+            role: true,
+            isActive: true,
+          },
+        },
+      },
     });
+
+    // If isEligible status changed and user account exists, update user account status
+    if (data.isEligible !== undefined && data.isEligible !== existingEmployee.isEligible && employee.user) {
+      await prisma.user.update({
+        where: { id: employee.user.id },
+        data: { isActive: data.isEligible },
+      });
+    }
 
     res.json(employee);
   } catch (error) {
@@ -451,11 +470,19 @@ router.post('/:id/disqualify', authenticateToken, requireAdmin, async (req: Requ
       },
     });
 
-    // Update employee eligibility
+    // Update employee eligibility and disable user account if exists
     await prisma.employee.update({
       where: { id: req.params.id },
       data: { isEligible: false },
     });
+
+    // Disable user account if exists
+    if (employee.email) {
+      await prisma.user.update({
+        where: { email: employee.email },
+        data: { isActive: false },
+      });
+    }
 
     res.status(201).json(disqualification);
   } catch (error) {

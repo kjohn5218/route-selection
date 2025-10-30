@@ -34,6 +34,7 @@ interface Employee {
   user?: {
     id: string;
     role: string;
+    isActive?: boolean;
   };
 }
 
@@ -332,6 +333,13 @@ const Employees = () => {
                       ) : (
                         <span className="inline-flex items-center px-2 py-1 rounded-full text-xs font-medium bg-gray-100 text-gray-800">
                           Inactive
+                        </span>
+                      )}
+                      {employee.user && (
+                        <span className={`inline-flex items-center px-2 py-1 rounded-full text-xs font-medium ${
+                          employee.user.isActive !== false ? 'bg-blue-100 text-blue-800' : 'bg-red-100 text-red-800'
+                        }`}>
+                          Account {employee.user.isActive !== false ? 'Enabled' : 'Disabled'}
                         </span>
                       )}
                     </div>
