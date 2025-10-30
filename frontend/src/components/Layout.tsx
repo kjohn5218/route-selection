@@ -13,7 +13,8 @@ import {
   Bell,
   Search,
   ChevronDown,
-  Truck
+  Truck,
+  UserCircle
 } from 'lucide-react';
 import { useState } from 'react';
 
