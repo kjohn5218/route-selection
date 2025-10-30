@@ -41,6 +41,7 @@ const Employees = () => {
   const { user } = useAuth();
   const queryClient = useQueryClient();
   const [searchTerm, setSearchTerm] = useState('');
+  const [statusFilter, setStatusFilter] = useState<'all' | 'active' | 'inactive'>('all');
   const [showAddModal, setShowAddModal] = useState(false);
   const [showEditModal, setShowEditModal] = useState(false);
   const [selectedEmployee, setSelectedEmployee] = useState<Employee | null>(null);
@@ -98,11 +99,21 @@ const Employees = () => {
     },
   });
 
-  const filteredEmployees = employees?.filter(employee =>
-    `${employee.firstName} ${employee.lastName}`.toLowerCase().includes(searchTerm.toLowerCase()) ||
-    employee.employeeId.toLowerCase().includes(searchTerm.toLowerCase()) ||
-    employee.email.toLowerCase().includes(searchTerm.toLowerCase())
-  ) || [];
+  const filteredEmployees = employees?.filter(employee => {
+    // Apply search filter
+    const matchesSearch = 
+      `${employee.firstName} ${employee.lastName}`.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      employee.employeeId.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      employee.email.toLowerCase().includes(searchTerm.toLowerCase());
+    
+    // Apply status filter
+    const matchesStatus = 
+      statusFilter === 'all' ||
+      (statusFilter === 'active' && employee.isEligible) ||
+      (statusFilter === 'inactive' && !employee.isEligible);
+    
+    return matchesSearch && matchesStatus;
+  }) || [];
 
   const handleEdit = (employee: Employee) => {
     setSelectedEmployee(employee);
@@ -174,10 +185,15 @@ const Employees = () => {
               className="input-field pl-10"
             />
           </div>
-          <button className="btn-secondary flex items-center gap-2">
-            <Filter className="w-4 h-4" />
-            Filters
-          </button>
+          <select
+            value={statusFilter}
+            onChange={(e) => setStatusFilter(e.target.value as 'all' | 'active' | 'inactive')}
+            className="input-field px-3 py-2"
+          >
+            <option value="all">All Employees</option>
+            <option value="active">Active Only</option>
+            <option value="inactive">Inactive Only</option>
+          </select>
         </div>
       </div>
 
@@ -223,9 +239,9 @@ const Employees = () => {
         <div className="card p-6">
           <div className="flex items-center justify-between">
             <div>
-              <p className="text-sm text-gray-600">Active Users</p>
+              <p className="text-sm text-gray-600">Active Employees</p>
               <p className="text-2xl font-bold text-gray-900">
-                {employees?.filter(e => e.user).length || 0}
+                {employees?.filter(e => e.isEligible).length || 0}
               </p>
             </div>
             <div className="bg-purple-100 p-3 rounded-xl">
@@ -309,18 +325,13 @@ const Employees = () => {
                   </td>
                   <td className="py-4 px-6">
                     <div className="space-y-1">
-                      {employee.user ? (
+                      {employee.isEligible ? (
                         <span className="inline-flex items-center px-2 py-1 rounded-full text-xs font-medium bg-green-100 text-green-800">
                           Active
                         </span>
                       ) : (
                         <span className="inline-flex items-center px-2 py-1 rounded-full text-xs font-medium bg-gray-100 text-gray-800">
                           Inactive
-                        </span>
-                      )}
-                      {!employee.isEligible && (
-                        <span className="inline-flex items-center px-2 py-1 rounded-full text-xs font-medium bg-red-100 text-red-800">
-                          Not Eligible
                         </span>
                       )}
                     </div>
@@ -520,7 +531,7 @@ const Employees = () => {
                     defaultChecked={selectedEmployee.isEligible}
                     className="w-4 h-4 text-primary-600 border-gray-300 rounded focus:ring-primary-500"
                   />
-                  <span className="text-sm font-medium text-gray-700">Eligible for Route Selection</span>
+                  <span className="text-sm font-medium text-gray-700">Active</span>
                 </label>
               </div>
               <div className="flex gap-3 justify-end pt-4">
@@ -670,7 +681,7 @@ const Employees = () => {
                     defaultChecked
                     className="w-4 h-4 text-primary-600 border-gray-300 rounded focus:ring-primary-500"
                   />
-                  <span className="text-sm font-medium text-gray-700">Eligible for Route Selection</span>
+                  <span className="text-sm font-medium text-gray-700">Active</span>
                 </label>
                 <label className="flex items-center gap-3">
                   <input
