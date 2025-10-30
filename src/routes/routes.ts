@@ -124,6 +124,12 @@ router.get('/available/:selectionPeriodId', authenticateToken, async (req: Reque
     }
 
     // Get current user's employee profile
+    console.log('User info:', {
+      userId: req.user?.id,
+      role: req.user?.role,
+      employeeId: req.user?.employeeId
+    });
+
     const employee = req.user?.employeeId ? await prisma.employee.findUnique({
       where: { id: req.user.employeeId },
       select: {
@@ -131,6 +137,8 @@ router.get('/available/:selectionPeriodId', authenticateToken, async (req: Reque
         chainExperience: true,
       }
     }) : null;
+
+    console.log('Employee profile:', employee);
 
     // Get routes that are part of this selection period
     const periodRoutes = await prisma.periodRoute.findMany({
@@ -199,12 +207,22 @@ router.get('/available/:selectionPeriodId', authenticateToken, async (req: Reque
 
     console.log('Final where clause:', JSON.stringify(whereClause, null, 2));
 
-    const availableRoutes = await prisma.route.findMany({
-      where: whereClause,
-      orderBy: { runNumber: 'asc' },
-    });
-
-    console.log('Found available routes:', availableRoutes.length);
+    let availableRoutes;
+    try {
+      availableRoutes = await prisma.route.findMany({
+        where: whereClause,
+        orderBy: { runNumber: 'asc' },
+      });
+      console.log('Found available routes:', availableRoutes.length);
+    } catch (queryError: any) {
+      console.error('Prisma query failed:', queryError);
+      console.error('Query error details:', {
+        message: queryError.message,
+        code: queryError.code,
+        meta: queryError.meta
+      });
+      throw queryError;
+    }
 
     res.json(availableRoutes);
   } catch (error: any) {
