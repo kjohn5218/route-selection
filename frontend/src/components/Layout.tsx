@@ -34,7 +34,7 @@ const Layout = () => {
     { path: '/employees', label: 'Employees', icon: Users, roles: ['Admin', 'Manager'] },
     { path: '/routes', label: 'Routes', icon: Route, roles: ['Admin', 'Manager'] },
     { path: '/periods', label: 'Selection Periods', icon: Calendar, roles: ['Admin', 'Manager'] },
-    { path: '/selections', label: 'My Selections', icon: CheckSquare },
+    { path: '/selections', label: 'My Selections', icon: CheckSquare, adminLabel: 'Selection Results' },
     { path: '/import-export', label: 'Import/Export', icon: FileUp, roles: ['Admin'] },
   ];
 
@@ -48,6 +48,9 @@ const Layout = () => {
 
   const getPageTitle = () => {
     const currentItem = menuItems.find(item => item.path === location.pathname);
+    if (currentItem && user?.role === 'Admin' && currentItem.adminLabel) {
+      return currentItem.adminLabel;
+    }
     return currentItem?.label || 'Dashboard';
   };
 
@@ -103,7 +106,7 @@ const Layout = () => {
                   }`}
                 >
                   <Icon className={`w-5 h-5 ${active ? 'text-primary-600' : 'text-gray-400'}`} />
-                  <span>{item.label}</span>
+                  <span>{user?.role === 'Admin' && item.adminLabel ? item.adminLabel : item.label}</span>
                 </Link>
               );
             })}

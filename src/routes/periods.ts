@@ -91,7 +91,7 @@ router.get('/active', authenticateToken, async (req: Request, res: Response) => 
 
     if (!activePeriod) {
       console.log('No active period found with status OPEN and current date in range');
-      return res.status(404).json({ error: 'No active selection period found' });
+      return res.json(null);
     }
 
     console.log('Active period found:', {
@@ -342,7 +342,10 @@ router.put('/:id', authenticateToken, requireAdmin, async (req: Request, res: Re
     }
 
     // Check for overlapping periods if dates are being changed
-    if (data.startDate || data.endDate) {
+    const startDateChanged = data.startDate && new Date(data.startDate + 'T00:00:00').getTime() !== existingPeriod.startDate.getTime();
+    const endDateChanged = data.endDate && new Date(data.endDate + 'T23:59:59').getTime() !== existingPeriod.endDate.getTime();
+    
+    if (startDateChanged || endDateChanged) {
       const startDate = data.startDate ? new Date(data.startDate + 'T00:00:00') : existingPeriod.startDate;
       const endDate = data.endDate ? new Date(data.endDate + 'T23:59:59') : existingPeriod.endDate;
 
@@ -559,6 +562,11 @@ router.delete('/:id', authenticateToken, requireAdmin, async (req: Request, res:
         error: 'Cannot delete period with existing selections or assignments' 
       });
     }
+
+    // Delete associated period routes first
+    await prisma.periodRoute.deleteMany({
+      where: { selectionPeriodId: req.params.id },
+    });
 
     await prisma.selectionPeriod.delete({
       where: { id: req.params.id },

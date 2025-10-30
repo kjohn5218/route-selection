@@ -117,6 +117,14 @@ const Periods = () => {
       setSelectedPeriod(null);
       resetForm();
     },
+    onError: (error: any) => {
+      const message = error.response?.data?.error || 'Failed to update period';
+      const details = error.response?.data?.details;
+      if (details) {
+        console.error('Update error details:', details);
+      }
+      alert(`Error: ${message}`);
+    },
   });
 
   // Delete period mutation
@@ -128,6 +136,11 @@ const Periods = () => {
       queryClient.invalidateQueries({ queryKey: ['periods'] });
       setShowDeleteModal(false);
       setSelectedPeriod(null);
+    },
+    onError: (error: any) => {
+      const message = error.response?.data?.error || 'Failed to delete period';
+      alert(`Error: ${message}`);
+      setShowDeleteModal(false);
     },
   });
 

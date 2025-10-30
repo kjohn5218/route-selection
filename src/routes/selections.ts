@@ -2,6 +2,9 @@ import { Router, Request, Response } from 'express';
 import { z } from 'zod';
 import prisma from '../utils/database.js';
 import { authenticateToken, requireAdmin, requireAdminOrSelf } from '../middleware/auth.js';
+import emailService from '../services/email.js';
+import { FileProcessor } from '../utils/fileProcessor.js';
+import PDFDocument from 'pdfkit';
 
 const router = Router();
 
@@ -93,21 +96,32 @@ router.get('/period/:periodId', authenticateToken, requireAdmin, async (req: Req
   try {
     const { periodId } = req.params;
 
+    // Get all eligible employees
+    const allEmployees = await prisma.employee.findMany({
+      where: { isEligible: true },
+      include: {
+        user: {
+          select: {
+            email: true,
+          },
+        },
+      },
+      orderBy: { hireDate: 'asc' },
+    });
+
+    // Get selections for the period
     const selections = await prisma.selection.findMany({
       where: {
         selectionPeriodId: periodId,
       },
       include: {
         employee: {
-          select: {
-            id: true,
-            employeeId: true,
-            firstName: true,
-            lastName: true,
-            hireDate: true,
-            doublesEndorsement: true,
-            chainExperience: true,
-            isEligible: true,
+          include: {
+            user: {
+              select: {
+                email: true,
+              },
+            },
           },
         },
         firstChoice: {
@@ -143,15 +157,48 @@ router.get('/period/:periodId', authenticateToken, requireAdmin, async (req: Req
             requiresChainExperience: true,
           },
         },
-      },
-      orderBy: {
-        employee: {
-          hireDate: 'asc',
+        assignedRoute: {
+          select: {
+            id: true,
+            runNumber: true,
+            origin: true,
+            destination: true,
+            type: true,
+          },
         },
       },
     });
 
-    res.json(selections);
+    // Create a map of selections by employee ID
+    const selectionMap = new Map(
+      selections.map(s => [s.employeeId, s])
+    );
+
+    // Combine all employees with their selections
+    const results = allEmployees.map(employee => {
+      const selection = selectionMap.get(employee.id);
+      return {
+        id: selection?.id || null,
+        employee: {
+          id: employee.id,
+          employeeNumber: employee.employeeId,
+          name: `${employee.firstName} ${employee.lastName}`,
+          firstName: employee.firstName,
+          lastName: employee.lastName,
+          email: employee.user?.email || null,
+          hireDate: employee.hireDate,
+          isEligible: employee.isEligible,
+        },
+        firstChoice: selection?.firstChoice || null,
+        secondChoice: selection?.secondChoice || null,
+        thirdChoice: selection?.thirdChoice || null,
+        assignedRoute: selection?.assignedRoute || null,
+        submittedAt: selection?.submittedAt || null,
+        confirmationNumber: selection?.confirmationNumber || null,
+      };
+    });
+
+    res.json(results);
   } catch (error) {
     console.error('Get period selections error:', error);
     res.status(500).json({ error: 'Internal server error' });
@@ -578,6 +625,247 @@ router.delete('/:id', authenticateToken, async (req: Request, res: Response) => 
   } catch (error) {
     console.error('Delete selection error:', error);
     res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
+// POST /api/selections/send-notifications - Send email notifications for selection results
+router.post('/send-notifications', authenticateToken, requireAdmin, async (req: Request, res: Response) => {
+  try {
+    const { periodId, employeeIds } = req.body;
+
+    if (!periodId) {
+      return res.status(400).json({ error: 'Period ID is required' });
+    }
+
+    // Get selection period
+    const selectionPeriod = await prisma.selectionPeriod.findUnique({
+      where: { id: periodId },
+    });
+
+    if (!selectionPeriod) {
+      return res.status(404).json({ error: 'Selection period not found' });
+    }
+
+    // Build query filters
+    const where: any = { selectionPeriodId: periodId };
+    if (employeeIds && employeeIds.length > 0) {
+      where.employeeId = { in: employeeIds };
+    }
+
+    // Get selections with employee and route details
+    const selections = await prisma.selection.findMany({
+      where,
+      include: {
+        employee: {
+          include: {
+            user: true,
+          },
+        },
+        firstChoice: true,
+        secondChoice: true,
+        thirdChoice: true,
+        assignedRoute: true,
+      },
+    });
+
+    // Send emails to each employee
+    const emailPromises = selections.map(async (selection) => {
+      if (!selection.employee.user?.email) return;
+
+      const emailContent = {
+        to: selection.employee.user.email,
+        subject: `Route Selection Results - ${selectionPeriod.name}`,
+        html: `
+          <h2>Route Selection Results</h2>
+          <p>Dear ${selection.employee.firstName} ${selection.employee.lastName},</p>
+          
+          <p>Here are your route selection results for ${selectionPeriod.name}:</p>
+          
+          <h3>Your Selections:</h3>
+          <ul>
+            ${selection.firstChoice ? `<li><strong>First Choice:</strong> Route #${selection.firstChoice.runNumber} - ${selection.firstChoice.origin} to ${selection.firstChoice.destination}</li>` : ''}
+            ${selection.secondChoice ? `<li><strong>Second Choice:</strong> Route #${selection.secondChoice.runNumber} - ${selection.secondChoice.origin} to ${selection.secondChoice.destination}</li>` : ''}
+            ${selection.thirdChoice ? `<li><strong>Third Choice:</strong> Route #${selection.thirdChoice.runNumber} - ${selection.thirdChoice.origin} to ${selection.thirdChoice.destination}</li>` : ''}
+          </ul>
+          
+          ${selection.assignedRoute ? `
+            <h3>Assigned Route:</h3>
+            <p><strong>Route #${selection.assignedRoute.runNumber}</strong> - ${selection.assignedRoute.origin} to ${selection.assignedRoute.destination}</p>
+            <p>Schedule: ${selection.assignedRoute.days} | ${selection.assignedRoute.startTime} - ${selection.assignedRoute.endTime}</p>
+          ` : '<p>Route assignment is pending. You will be notified once routes are assigned.</p>'}
+          
+          <p>Confirmation Number: ${selection.confirmationNumber}</p>
+          
+          <p>If you have any questions, please contact your supervisor.</p>
+          
+          <p>Best regards,<br>Route Selection System</p>
+        `,
+      };
+
+      return emailService.sendEmail(emailContent);
+    });
+
+    await Promise.allSettled(emailPromises);
+
+    // Create audit log
+    await prisma.auditLog.create({
+      data: {
+        userId: req.user!.id,
+        action: 'SEND_SELECTION_NOTIFICATIONS',
+        resource: 'Selection',
+        details: JSON.stringify({
+          selectionPeriodId: periodId,
+          employeeCount: selections.length,
+          employeeIds: employeeIds || 'all',
+        }),
+      },
+    });
+
+    res.json({ 
+      message: 'Email notifications sent successfully',
+      count: selections.length 
+    });
+  } catch (error) {
+    console.error('Send notifications error:', error);
+    res.status(500).json({ error: 'Failed to send notifications' });
+  }
+});
+
+// GET /api/selections/download/:periodId - Download selection results
+router.get('/download/:periodId', authenticateToken, requireAdmin, async (req: Request, res: Response) => {
+  try {
+    const { periodId } = req.params;
+    const { format = 'csv' } = req.query;
+
+    // Get selection period
+    const selectionPeriod = await prisma.selectionPeriod.findUnique({
+      where: { id: periodId },
+    });
+
+    if (!selectionPeriod) {
+      return res.status(404).json({ error: 'Selection period not found' });
+    }
+
+    // Get all selections for the period
+    const selections = await prisma.selection.findMany({
+      where: { selectionPeriodId: periodId },
+      include: {
+        employee: {
+          include: {
+            user: true,
+          },
+        },
+        firstChoice: true,
+        secondChoice: true,
+        thirdChoice: true,
+        assignedRoute: true,
+      },
+      orderBy: {
+        employee: {
+          hireDate: 'asc',
+        },
+      },
+    });
+
+    // Get all employees (including those without selections)
+    const allEmployees = await prisma.employee.findMany({
+      where: { isEligible: true },
+      include: {
+        user: true,
+      },
+      orderBy: { hireDate: 'asc' },
+    });
+
+    // Create a map of selections by employee ID
+    const selectionMap = new Map(
+      selections.map(s => [s.employeeId, s])
+    );
+
+    // Build the data array including employees without selections
+    const data = allEmployees.map(employee => {
+      const selection = selectionMap.get(employee.id);
+      return {
+        'Employee Number': employee.employeeId,
+        'Name': `${employee.firstName} ${employee.lastName}`,
+        'Email': employee.user?.email || '',
+        'Hire Date': employee.hireDate.toISOString().split('T')[0],
+        'Status': selection ? 'Submitted' : 'Not Submitted',
+        'First Choice': selection?.firstChoice ? `#${selection.firstChoice.runNumber} - ${selection.firstChoice.origin} to ${selection.firstChoice.destination}` : '',
+        'Second Choice': selection?.secondChoice ? `#${selection.secondChoice.runNumber} - ${selection.secondChoice.origin} to ${selection.secondChoice.destination}` : '',
+        'Third Choice': selection?.thirdChoice ? `#${selection.thirdChoice.runNumber} - ${selection.thirdChoice.origin} to ${selection.thirdChoice.destination}` : '',
+        'Assigned Route': selection?.assignedRoute ? `#${selection.assignedRoute.runNumber} - ${selection.assignedRoute.origin} to ${selection.assignedRoute.destination}` : '',
+        'Confirmation Number': selection?.confirmationNumber || '',
+        'Submitted At': selection?.submittedAt ? selection.submittedAt.toISOString() : '',
+      };
+    });
+
+    if (format === 'pdf') {
+      // Create PDF document
+      const doc = new PDFDocument({ margin: 50 });
+      const chunks: Buffer[] = [];
+
+      doc.on('data', (chunk) => chunks.push(chunk));
+      doc.on('end', () => {
+        const result = Buffer.concat(chunks);
+        res.setHeader('Content-Type', 'application/pdf');
+        res.setHeader('Content-Disposition', `attachment; filename="selection-results-${periodId}.pdf"`);
+        res.send(result);
+      });
+
+      // Add title
+      doc.fontSize(20).text(`Selection Results - ${selectionPeriod.name}`, { align: 'center' });
+      doc.moveDown();
+      doc.fontSize(12).text(`Generated: ${new Date().toLocaleDateString()}`, { align: 'center' });
+      doc.moveDown(2);
+
+      // Add summary
+      const submitted = selections.length;
+      const notSubmitted = allEmployees.length - submitted;
+      doc.fontSize(14).text('Summary:', { underline: true });
+      doc.fontSize(12);
+      doc.text(`Total Eligible Employees: ${allEmployees.length}`);
+      doc.text(`Submitted: ${submitted}`);
+      doc.text(`Not Submitted: ${notSubmitted}`);
+      doc.moveDown(2);
+
+      // Add employee selections
+      doc.fontSize(14).text('Employee Selections:', { underline: true });
+      doc.moveDown();
+
+      data.forEach((employee, index) => {
+        if (index > 0 && index % 5 === 0) {
+          doc.addPage();
+        }
+
+        doc.fontSize(12).text(`${employee['Employee Number']} - ${employee.Name}`, { underline: true });
+        doc.fontSize(10);
+        doc.text(`Status: ${employee.Status}`);
+        if (employee.Status === 'Submitted') {
+          if (employee['First Choice']) doc.text(`First Choice: ${employee['First Choice']}`);
+          if (employee['Second Choice']) doc.text(`Second Choice: ${employee['Second Choice']}`);
+          if (employee['Third Choice']) doc.text(`Third Choice: ${employee['Third Choice']}`);
+          if (employee['Assigned Route']) {
+            doc.text(`Assigned Route: ${employee['Assigned Route']}`, { 
+              color: 'green',
+              underline: true 
+            });
+          }
+          doc.text(`Confirmation: ${employee['Confirmation Number']}`);
+        }
+        doc.moveDown();
+      });
+
+      doc.end();
+    } else {
+      // Generate CSV
+      const csv = await FileProcessor.generateCSV(data);
+      res.setHeader('Content-Type', 'text/csv');
+      res.setHeader('Content-Disposition', `attachment; filename="selection-results-${periodId}.csv"`);
+      res.send(csv);
+    }
+  } catch (error) {
+    console.error('Download selection results error:', error);
+    res.status(500).json({ error: 'Failed to generate download' });
   }
 });
 

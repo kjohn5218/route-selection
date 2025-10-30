@@ -1,8 +1,9 @@
 import { useState, useEffect } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { AlertCircle, CheckCircle, Route, Calendar, Clock, MapPin, Truck, AlertTriangle, Search } from 'lucide-react';
+import { AlertCircle, CheckCircle, Route, Calendar, Clock, MapPin, Truck, AlertTriangle, Search, Download, Mail, FileSpreadsheet, Filter, Users } from 'lucide-react';
 import apiClient from '../api/client';
 import { useAuth } from '../contexts/AuthContext';
+import { Link } from 'react-router-dom';
 
 interface Route {
   id: string;
@@ -206,16 +207,7 @@ const Selections = () => {
 
   // Admin view - show all selections
   if (user?.role === 'Admin') {
-    return (
-      <div>
-        <h1 className="text-2xl font-bold text-gray-900 mb-6">Route Selections</h1>
-        <div className="card">
-          <div className="p-6">
-            <p className="text-gray-600">Admin view for managing all employee selections.</p>
-          </div>
-        </div>
-      </div>
-    );
+    return <AdminSelectionResults />;
   }
 
   // No active period
@@ -735,6 +727,431 @@ const Selections = () => {
            isEditMode ? 'Update Selection' : 'Submit Selection'}
         </button>
       </div>
+    </div>
+  );
+};
+
+// Admin Selection Results Component
+const AdminSelectionResults = () => {
+  const queryClient = useQueryClient();
+  const [selectedPeriodId, setSelectedPeriodId] = useState<string>('');
+  const [searchTerm, setSearchTerm] = useState('');
+  const [filterStatus, setFilterStatus] = useState<string>('ALL');
+  const [showEmailModal, setShowEmailModal] = useState(false);
+  const [selectedEmployees, setSelectedEmployees] = useState<string[]>([]);
+
+  // Get all selection periods
+  const { data: selectionPeriods = [] } = useQuery<SelectionPeriod[]>({
+    queryKey: ['selection-periods'],
+    queryFn: async () => {
+      const response = await apiClient.get('/periods');
+      return response.data;
+    },
+  });
+
+  // Get selections for selected period
+  const { data: periodSelections = [], isLoading: selectionsLoading } = useQuery({
+    queryKey: ['period-selections', selectedPeriodId],
+    queryFn: async () => {
+      if (!selectedPeriodId) return [];
+      const response = await apiClient.get(`/selections/period/${selectedPeriodId}`);
+      return response.data;
+    },
+    enabled: !!selectedPeriodId,
+  });
+
+  // Send email notification mutation
+  const sendEmailNotifications = useMutation({
+    mutationFn: async (data: { periodId: string; employeeIds?: string[] }) => {
+      const response = await apiClient.post('/selections/send-notifications', data);
+      return response.data;
+    },
+    onSuccess: () => {
+      alert('Email notifications sent successfully');
+      setShowEmailModal(false);
+      setSelectedEmployees([]);
+    },
+    onError: (error: any) => {
+      alert(error.response?.data?.error || 'Failed to send notifications');
+    },
+  });
+
+  // Download selection results
+  const downloadResults = async (format: 'csv' | 'pdf') => {
+    try {
+      const response = await apiClient.get(`/selections/download/${selectedPeriodId}`, {
+        params: { format },
+        responseType: 'blob',
+      });
+
+      const blob = new Blob([response.data], { 
+        type: format === 'csv' ? 'text/csv' : 'application/pdf' 
+      });
+      
+      const url = window.URL.createObjectURL(blob);
+      const link = document.createElement('a');
+      link.href = url;
+      link.download = `selection-results-${selectedPeriodId}.${format}`;
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+      window.URL.revokeObjectURL(url);
+    } catch (error: any) {
+      alert(error.response?.data?.error || 'Failed to download results');
+    }
+  };
+
+  // Filter selections
+  const filteredSelections = periodSelections.filter((selection: any) => {
+    const matchesSearch = searchTerm === '' || 
+      selection.employee?.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      selection.employee?.email.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      selection.employee?.employeeNumber?.toLowerCase().includes(searchTerm.toLowerCase());
+    
+    const matchesStatus = filterStatus === 'ALL' || 
+      (filterStatus === 'SUBMITTED' && selection.submittedAt) ||
+      (filterStatus === 'NOT_SUBMITTED' && !selection.submittedAt) ||
+      (filterStatus === 'ASSIGNED' && selection.assignedRouteId);
+    
+    return matchesSearch && matchesStatus;
+  });
+
+  const selectedPeriod = selectionPeriods.find(p => p.id === selectedPeriodId);
+  
+  const stats = {
+    total: periodSelections.length,
+    submitted: periodSelections.filter((s: any) => s.submittedAt).length,
+    notSubmitted: periodSelections.filter((s: any) => !s.submittedAt).length,
+    assigned: periodSelections.filter((s: any) => s.assignedRouteId).length,
+  };
+
+  useEffect(() => {
+    // Auto-select the most recent period
+    if (selectionPeriods.length > 0 && !selectedPeriodId) {
+      setSelectedPeriodId(selectionPeriods[0].id);
+    }
+  }, [selectionPeriods, selectedPeriodId]);
+
+  const toggleEmployeeSelection = (employeeId: string) => {
+    setSelectedEmployees(prev => 
+      prev.includes(employeeId) 
+        ? prev.filter(id => id !== employeeId)
+        : [...prev, employeeId]
+    );
+  };
+
+  return (
+    <div>
+      <div className="flex items-center justify-between mb-6">
+        <h1 className="text-2xl font-bold text-gray-900">Selection Results</h1>
+        <div className="flex gap-3">
+          {selectedPeriodId && (
+            <>
+              <button
+                onClick={() => setShowEmailModal(true)}
+                className="btn-secondary flex items-center gap-2"
+              >
+                <Mail className="w-4 h-4" />
+                Send Notifications
+              </button>
+              <div className="relative group">
+                <button className="btn-primary flex items-center gap-2">
+                  <Download className="w-4 h-4" />
+                  Download Results
+                </button>
+                <div className="absolute right-0 mt-2 w-48 bg-white rounded-lg shadow-lg border border-gray-200 py-1 opacity-0 invisible group-hover:opacity-100 group-hover:visible transition-all">
+                  <button
+                    onClick={() => downloadResults('csv')}
+                    className="w-full text-left px-4 py-2 text-sm text-gray-700 hover:bg-gray-50 flex items-center gap-2"
+                  >
+                    <FileSpreadsheet className="w-4 h-4" />
+                    Download as CSV
+                  </button>
+                  <button
+                    onClick={() => downloadResults('pdf')}
+                    className="w-full text-left px-4 py-2 text-sm text-gray-700 hover:bg-gray-50 flex items-center gap-2"
+                  >
+                    <Download className="w-4 h-4" />
+                    Download as PDF
+                  </button>
+                </div>
+              </div>
+            </>
+          )}
+        </div>
+      </div>
+
+      {/* Period Selection */}
+      <div className="mb-6 flex flex-col lg:flex-row gap-4">
+        <div className="flex-1">
+          <label className="block text-sm font-medium text-gray-700 mb-1">
+            Selection Period
+          </label>
+          <select
+            className="form-select"
+            value={selectedPeriodId}
+            onChange={(e) => setSelectedPeriodId(e.target.value)}
+          >
+            <option value="">Select a period...</option>
+            {selectionPeriods.map(period => (
+              <option key={period.id} value={period.id}>
+                {period.name} ({period.status})
+              </option>
+            ))}
+          </select>
+        </div>
+        {selectedPeriod && (
+          <div className="lg:w-auto flex items-end">
+            <Link
+              to={`/periods/${selectedPeriod.id}/manage`}
+              className="btn-secondary"
+            >
+              Manage Period
+            </Link>
+          </div>
+        )}
+      </div>
+
+      {selectedPeriodId && (
+        <>
+          {/* Statistics Cards */}
+          <div className="grid grid-cols-1 md:grid-cols-4 gap-4 mb-6">
+            <div className="card p-4">
+              <div className="flex items-center justify-between">
+                <div>
+                  <p className="text-sm font-medium text-gray-600">Total Employees</p>
+                  <p className="text-2xl font-semibold text-gray-900">{stats.total}</p>
+                </div>
+                <Users className="w-8 h-8 text-gray-400" />
+              </div>
+            </div>
+            <div className="card p-4">
+              <div className="flex items-center justify-between">
+                <div>
+                  <p className="text-sm font-medium text-gray-600">Submitted</p>
+                  <p className="text-2xl font-semibold text-green-600">{stats.submitted}</p>
+                </div>
+                <CheckCircle className="w-8 h-8 text-green-400" />
+              </div>
+            </div>
+            <div className="card p-4">
+              <div className="flex items-center justify-between">
+                <div>
+                  <p className="text-sm font-medium text-gray-600">Not Submitted</p>
+                  <p className="text-2xl font-semibold text-amber-600">{stats.notSubmitted}</p>
+                </div>
+                <AlertCircle className="w-8 h-8 text-amber-400" />
+              </div>
+            </div>
+            <div className="card p-4">
+              <div className="flex items-center justify-between">
+                <div>
+                  <p className="text-sm font-medium text-gray-600">Assigned Routes</p>
+                  <p className="text-2xl font-semibold text-primary-600">{stats.assigned}</p>
+                </div>
+                <Route className="w-8 h-8 text-primary-400" />
+              </div>
+            </div>
+          </div>
+
+          {/* Search and Filters */}
+          <div className="mb-6 flex flex-col lg:flex-row gap-4">
+            <div className="flex-1 relative">
+              <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
+              <input
+                type="text"
+                placeholder="Search by employee name, email, or number..."
+                value={searchTerm}
+                onChange={(e) => setSearchTerm(e.target.value)}
+                className="form-input pl-10"
+              />
+            </div>
+            <div className="lg:w-48">
+              <select
+                className="form-select"
+                value={filterStatus}
+                onChange={(e) => setFilterStatus(e.target.value)}
+              >
+                <option value="ALL">All Employees</option>
+                <option value="SUBMITTED">Submitted</option>
+                <option value="NOT_SUBMITTED">Not Submitted</option>
+                <option value="ASSIGNED">Assigned</option>
+              </select>
+            </div>
+          </div>
+
+          {/* Results Table */}
+          <div className="card">
+            <div className="overflow-x-auto">
+              <table className="min-w-full divide-y divide-gray-200">
+                <thead className="bg-gray-50">
+                  <tr>
+                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                      <input
+                        type="checkbox"
+                        className="form-checkbox"
+                        checked={selectedEmployees.length === filteredSelections.length && filteredSelections.length > 0}
+                        onChange={(e) => {
+                          if (e.target.checked) {
+                            setSelectedEmployees(filteredSelections.map((s: any) => s.employee?.id).filter(Boolean));
+                          } else {
+                            setSelectedEmployees([]);
+                          }
+                        }}
+                      />
+                    </th>
+                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                      Employee
+                    </th>
+                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                      Status
+                    </th>
+                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                      First Choice
+                    </th>
+                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                      Second Choice
+                    </th>
+                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                      Third Choice
+                    </th>
+                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                      Assigned Route
+                    </th>
+                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                      Submitted At
+                    </th>
+                  </tr>
+                </thead>
+                <tbody className="bg-white divide-y divide-gray-200">
+                  {selectionsLoading ? (
+                    <tr>
+                      <td colSpan={8} className="px-6 py-12 text-center text-gray-500">
+                        Loading selections...
+                      </td>
+                    </tr>
+                  ) : filteredSelections.length === 0 ? (
+                    <tr>
+                      <td colSpan={8} className="px-6 py-12 text-center text-gray-500">
+                        No selections found
+                      </td>
+                    </tr>
+                  ) : (
+                    filteredSelections.map((selection: any) => (
+                      <tr key={selection.id || selection.employee?.id}>
+                        <td className="px-6 py-4 whitespace-nowrap">
+                          <input
+                            type="checkbox"
+                            className="form-checkbox"
+                            checked={selectedEmployees.includes(selection.employee?.id)}
+                            onChange={() => toggleEmployeeSelection(selection.employee?.id)}
+                          />
+                        </td>
+                        <td className="px-6 py-4 whitespace-nowrap">
+                          <div>
+                            <div className="text-sm font-medium text-gray-900">
+                              {selection.employee?.name || 'Unknown'}
+                            </div>
+                            <div className="text-sm text-gray-500">
+                              {selection.employee?.email}
+                            </div>
+                            {selection.employee?.employeeNumber && (
+                              <div className="text-xs text-gray-400">
+                                #{selection.employee.employeeNumber}
+                              </div>
+                            )}
+                          </div>
+                        </td>
+                        <td className="px-6 py-4 whitespace-nowrap">
+                          {selection.submittedAt ? (
+                            <span className="inline-flex items-center px-2 py-1 rounded-full text-xs font-medium bg-green-100 text-green-800">
+                              Submitted
+                            </span>
+                          ) : (
+                            <span className="inline-flex items-center px-2 py-1 rounded-full text-xs font-medium bg-amber-100 text-amber-800">
+                              Not Submitted
+                            </span>
+                          )}
+                        </td>
+                        <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
+                          {selection.firstChoice ? (
+                            <div>
+                              <div className="font-medium">#{selection.firstChoice.runNumber}</div>
+                              <div className="text-xs text-gray-500">{selection.firstChoice.origin} → {selection.firstChoice.destination}</div>
+                            </div>
+                          ) : '-'}
+                        </td>
+                        <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
+                          {selection.secondChoice ? (
+                            <div>
+                              <div className="font-medium">#{selection.secondChoice.runNumber}</div>
+                              <div className="text-xs text-gray-500">{selection.secondChoice.origin} → {selection.secondChoice.destination}</div>
+                            </div>
+                          ) : '-'}
+                        </td>
+                        <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
+                          {selection.thirdChoice ? (
+                            <div>
+                              <div className="font-medium">#{selection.thirdChoice.runNumber}</div>
+                              <div className="text-xs text-gray-500">{selection.thirdChoice.origin} → {selection.thirdChoice.destination}</div>
+                            </div>
+                          ) : '-'}
+                        </td>
+                        <td className="px-6 py-4 whitespace-nowrap text-sm">
+                          {selection.assignedRoute ? (
+                            <div className="text-primary-600 font-medium">
+                              <div>#{selection.assignedRoute.runNumber}</div>
+                              <div className="text-xs">{selection.assignedRoute.origin} → {selection.assignedRoute.destination}</div>
+                            </div>
+                          ) : '-'}
+                        </td>
+                        <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+                          {selection.submittedAt ? new Date(selection.submittedAt).toLocaleString() : '-'}
+                        </td>
+                      </tr>
+                    ))
+                  )}
+                </tbody>
+              </table>
+            </div>
+          </div>
+        </>
+      )}
+
+      {/* Email Modal */}
+      {showEmailModal && (
+        <div className="fixed inset-0 bg-black/50 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+          <div className="bg-white rounded-lg shadow-xl max-w-md w-full p-6">
+            <h3 className="text-lg font-semibold text-gray-900 mb-4">
+              Send Email Notifications
+            </h3>
+            <p className="text-gray-600 mb-4">
+              Send selection results to {selectedEmployees.length > 0 ? `${selectedEmployees.length} selected employees` : 'all employees'}.
+            </p>
+            <div className="flex justify-end gap-3">
+              <button
+                onClick={() => {
+                  setShowEmailModal(false);
+                  setSelectedEmployees([]);
+                }}
+                className="btn-secondary"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={() => sendEmailNotifications.mutate({
+                  periodId: selectedPeriodId,
+                  employeeIds: selectedEmployees.length > 0 ? selectedEmployees : undefined
+                })}
+                disabled={sendEmailNotifications.isPending}
+                className="btn-primary"
+              >
+                {sendEmailNotifications.isPending ? 'Sending...' : 'Send Emails'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 };

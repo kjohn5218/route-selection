@@ -38,6 +38,7 @@
     "multer": "^2.0.2",
     "nodemailer": "^7.0.10",
     "papaparse": "^5.4.1",
+    "pdfkit": "^0.17.2",
     "xlsx": "^0.18.5",
     "zod": "^3.22.4"
   },
@@ -48,6 +49,7 @@
     "@types/jsonwebtoken": "^9.0.5",
     "@types/node": "^20.10.0",
     "@types/papaparse": "^5.3.14",
+    "@types/pdfkit": "^0.17.3",
     "prisma": "^5.7.0",
     "tsx": "^4.6.0",
     "typescript": "^5.3.2"
