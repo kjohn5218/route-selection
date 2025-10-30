@@ -187,20 +187,14 @@ router.get('/available/:selectionPeriodId', authenticateToken, async (req: Reque
       // Filter doubles routes if driver doesn't have endorsement
       if (!employee.doublesEndorsement) {
         whereClause.AND.push({
-          OR: [
-            { requiresDoublesEndorsement: false },
-            { requiresDoublesEndorsement: null },
-          ]
+          requiresDoublesEndorsement: false
         });
       }
       
       // Filter chain experience routes if driver doesn't have experience
       if (!employee.chainExperience) {
         whereClause.AND.push({
-          OR: [
-            { requiresChainExperience: false },
-            { requiresChainExperience: null },
-          ]
+          requiresChainExperience: false
         });
       }
     }
