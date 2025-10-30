@@ -13,6 +13,7 @@ import ImportExport from './pages/ImportExport';
 import SelectionManagement from './pages/SelectionManagement';
 import ForgotPassword from './pages/ForgotPassword';
 import ResetPassword from './pages/ResetPassword';
+import Users from './pages/Users';
 
 const queryClient = new QueryClient({
   defaultOptions: {
@@ -48,6 +49,7 @@ function App() {
               <Route path="periods/:periodId/manage" element={<SelectionManagement />} />
               <Route path="selections" element={<Selections />} />
               <Route path="import-export" element={<ImportExport />} />
+              <Route path="users" element={<Users />} />
             </Route>
           </Routes>
         </AuthProvider>

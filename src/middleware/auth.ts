@@ -23,7 +23,7 @@ export const authenticateToken = (req: Request, res: Response, next: NextFunctio
     req.user = {
       id: decoded.userId,
       email: decoded.email,
-      role: decoded.role as 'ADMIN' | 'DRIVER',
+      role: decoded.role as 'ADMIN' | 'DRIVER' | 'MANAGER',
       employeeId: decoded.employeeId,
     };
 
@@ -38,8 +38,8 @@ export const requireAdmin = (req: Request, res: Response, next: NextFunction) =>
     return res.status(401).json({ error: 'Authentication required' });
   }
 
-  if (req.user.role !== 'ADMIN') {
-    return res.status(403).json({ error: 'Admin access required' });
+  if (req.user.role !== 'ADMIN' && req.user.role !== 'MANAGER') {
+    return res.status(403).json({ error: 'Admin or Manager access required' });
   }
 
   next();
@@ -64,7 +64,7 @@ export const requireAdminOrSelf = (req: Request, res: Response, next: NextFuncti
 
   const targetEmployeeId = req.params.employeeId || req.body.employeeId;
   
-  if (req.user.role === 'ADMIN' || req.user.employeeId === targetEmployeeId) {
+  if (req.user.role === 'ADMIN' || req.user.role === 'MANAGER' || req.user.employeeId === targetEmployeeId) {
     next();
   } else {
     return res.status(403).json({ error: 'Access denied: can only access own data' });

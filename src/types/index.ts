@@ -3,7 +3,7 @@ import { Request } from 'express';
 export interface AuthUser {
   id: string;
   email: string;
-  role: 'ADMIN' | 'DRIVER';
+  role: 'ADMIN' | 'DRIVER' | 'MANAGER';
   employeeId?: string;
 }
 
@@ -26,7 +26,7 @@ export interface LoginRequest {
 export interface CreateUserRequest {
   email: string;
   password: string;
-  role?: 'ADMIN' | 'DRIVER';
+  role?: 'ADMIN' | 'DRIVER' | 'MANAGER';
   employeeData?: {
     employeeId: string;
     firstName: string;

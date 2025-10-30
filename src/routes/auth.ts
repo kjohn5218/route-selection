@@ -15,7 +15,7 @@ const loginSchema = z.object({
 const createUserSchema = z.object({
   email: z.string().email(),
   password: z.string().min(6),
-  role: z.enum(['ADMIN', 'DRIVER']).optional().default('DRIVER'),
+  role: z.enum(['ADMIN', 'DRIVER', 'MANAGER']).optional().default('DRIVER'),
   employeeData: z.object({
     employeeId: z.string(),
     firstName: z.string(),
