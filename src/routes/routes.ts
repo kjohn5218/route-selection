@@ -154,13 +154,23 @@ router.get('/available/:selectionPeriodId', authenticateToken, async (req: Reque
       .filter(a => a.routeId)
       .map(a => a.routeId as string);
 
+    console.log('Building where clause:', {
+      periodRouteIds,
+      assignedIds,
+      hasAssignedIds: assignedIds.length > 0
+    });
+
     const whereClause: any = {
       id: {
         in: periodRouteIds,
-        notIn: assignedIds,
       },
       isActive: true,
     };
+
+    // Only add notIn if there are actually assigned IDs
+    if (assignedIds.length > 0) {
+      whereClause.id.notIn = assignedIds;
+    }
 
     // If it's a driver, filter out routes they don't qualify for
     if (req.user?.role === 'DRIVER' && employee) {
@@ -187,15 +197,28 @@ router.get('/available/:selectionPeriodId', authenticateToken, async (req: Reque
       }
     }
 
+    console.log('Final where clause:', JSON.stringify(whereClause, null, 2));
+
     const availableRoutes = await prisma.route.findMany({
       where: whereClause,
       orderBy: { runNumber: 'asc' },
     });
 
+    console.log('Found available routes:', availableRoutes.length);
+
     res.json(availableRoutes);
-  } catch (error) {
+  } catch (error: any) {
     console.error('Get available routes error:', error);
-    res.status(500).json({ error: 'Internal server error' });
+    console.error('Error details:', {
+      message: error.message,
+      stack: error.stack,
+      code: error.code,
+      meta: error.meta
+    });
+    res.status(500).json({ 
+      error: 'Internal server error',
+      details: error.message || 'Failed to fetch available routes'
+    });
   }
 });
 
