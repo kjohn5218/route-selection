@@ -60,7 +60,7 @@ const Selections = () => {
   const [showListView, setShowListView] = useState(true);
 
   // Get active selection period
-  const { data: activePeriod } = useQuery<SelectionPeriod | null>({
+  const { data: activePeriod, isLoading: periodLoading, error: periodError } = useQuery<SelectionPeriod | null>({
     queryKey: ['active-selection-period'],
     queryFn: async () => {
       const response = await apiClient.get('/periods/active');
@@ -84,10 +84,24 @@ const Selections = () => {
 
   // Debug logging
   useEffect(() => {
-    console.log('Available routes query enabled:', !!activePeriod?.id && activePeriod?.status === 'OPEN');
+    console.log('=== Selection Page Debug ===');
+    console.log('User:', user);
     console.log('Active period:', activePeriod);
+    console.log('Period loading:', periodLoading);
+    console.log('Period error:', periodError);
+    console.log('Available routes query enabled:', !!activePeriod?.id && activePeriod?.status === 'OPEN');
     console.log('Available routes:', availableRoutes);
-  }, [activePeriod, availableRoutes]);
+    console.log('Routes loading:', routesLoading);
+    if (activePeriod) {
+      console.log('Period details:', {
+        id: activePeriod.id,
+        status: activePeriod.status,
+        name: activePeriod.name,
+        startDate: activePeriod.startDate,
+        endDate: activePeriod.endDate
+      });
+    }
+  }, [activePeriod, availableRoutes, periodLoading, periodError, routesLoading, user]);
 
   // Get current selection
   const { data: currentSelection } = useQuery<Selection | null>({
@@ -210,8 +224,62 @@ const Selections = () => {
     return <AdminSelectionResults />;
   }
 
-  // No active period
-  if (!activePeriod || activePeriod.status !== 'OPEN') {
+  // Loading state
+  if (periodLoading) {
+    return (
+      <div className="max-w-4xl mx-auto">
+        <h1 className="text-2xl font-bold text-gray-900 mb-6">Route Selection</h1>
+        <div className="animate-pulse">
+          <div className="h-32 bg-gray-200 rounded-lg"></div>
+        </div>
+      </div>
+    );
+  }
+
+  // Error state
+  if (periodError) {
+    return (
+      <div className="max-w-4xl mx-auto">
+        <h1 className="text-2xl font-bold text-gray-900 mb-6">Route Selection</h1>
+        <div className="bg-red-50 border border-red-200 rounded-lg p-6">
+          <div className="flex items-center gap-3">
+            <AlertCircle className="w-6 h-6 text-red-600" />
+            <div>
+              <h3 className="font-semibold text-red-900">Error Loading Selection Period</h3>
+              <p className="text-red-700 mt-1">
+                Failed to load selection period data. Please try refreshing the page.
+              </p>
+            </div>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  // No active period (check both null and status)
+  if (!activePeriod) {
+    console.log('No active period found (null)');
+    return (
+      <div className="max-w-4xl mx-auto">
+        <h1 className="text-2xl font-bold text-gray-900 mb-6">Route Selection</h1>
+        <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-6">
+          <div className="flex items-center gap-3">
+            <AlertCircle className="w-6 h-6 text-yellow-600" />
+            <div>
+              <h3 className="font-semibold text-yellow-900">No Active Selection Period</h3>
+              <p className="text-yellow-700 mt-1">
+                There is no selection period currently open. Please check back later or contact your administrator.
+              </p>
+            </div>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  // Check if period is not open
+  if (activePeriod.status !== 'OPEN') {
+    console.log('Active period found but not OPEN:', activePeriod.status);
     return (
       <div className="max-w-4xl mx-auto">
         <h1 className="text-2xl font-bold text-gray-900 mb-6">Route Selection</h1>
