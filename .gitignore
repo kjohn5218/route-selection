@@ -5,6 +5,7 @@ node_modules/
 prisma/dev.db
 *.db
 *.db-journal
+backups/
 
 # Environment files
 .env
