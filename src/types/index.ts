@@ -5,6 +5,7 @@ export interface AuthUser {
   email: string;
   role: 'ADMIN' | 'DRIVER' | 'MANAGER';
   employeeId?: string;
+  terminalId?: string;
 }
 
 export interface AuthRequest extends Request {
@@ -16,6 +17,7 @@ export interface JwtPayload {
   email: string;
   role: string;
   employeeId?: string;
+  terminalId?: string;
 }
 
 export interface LoginRequest {

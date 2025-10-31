@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import { Upload, Download, FileText, AlertCircle, CheckCircle, X, FileSpreadsheet, Users, Route } from 'lucide-react';
 import { useMutation } from '@tanstack/react-query';
 import apiClient from '../api/client';
+import { useTerminal } from '../contexts/TerminalContext';
 
 interface ImportResult {
   preview?: boolean;
@@ -31,6 +32,7 @@ interface ImportResult {
 }
 
 const ImportExport = () => {
+  const { selectedTerminal } = useTerminal();
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
   const [importType, setImportType] = useState<'routes' | 'employees'>('routes');
   const [previewResult, setPreviewResult] = useState<ImportResult | null>(null);
@@ -43,7 +45,7 @@ const ImportExport = () => {
   const previewMutation = useMutation({
     mutationFn: async (formData: FormData) => {
       const response = await apiClient.post(
-        `/import/${importType}/preview`,
+        `/import/${importType}/preview${selectedTerminal ? `?terminalId=${selectedTerminal.id}` : ''}`,
         formData,
         {
           headers: {
@@ -62,7 +64,7 @@ const ImportExport = () => {
   const executeMutation = useMutation({
     mutationFn: async (formData: FormData) => {
       const response = await apiClient.post(
-        `/import/${importType}/execute`,
+        `/import/${importType}/execute${selectedTerminal ? `?terminalId=${selectedTerminal.id}` : ''}`,
         formData,
         {
           headers: {
@@ -131,6 +133,7 @@ const ImportExport = () => {
   const downloadExport = async (type: 'routes' | 'employees') => {
     try {
       const response = await apiClient.get(`/export/${type}`, {
+        params: { terminalId: selectedTerminal?.id },
         responseType: 'blob',
       });
       

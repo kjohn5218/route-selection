@@ -9,15 +9,19 @@ const router = Router();
 const createUserSchema = z.object({
   email: z.string().email(),
   password: z.string().min(6),
+  name: z.string().optional(),
   role: z.enum(['ADMIN', 'MANAGER', 'DRIVER']),
   isActive: z.boolean().optional().default(true),
+  terminalIds: z.array(z.string()).optional(),
 });
 
 const updateUserSchema = z.object({
   email: z.string().email().optional(),
   password: z.string().min(6).optional(),
+  name: z.string().optional(),
   role: z.enum(['ADMIN', 'MANAGER', 'DRIVER']).optional(),
   isActive: z.boolean().optional(),
+  terminalIds: z.array(z.string()).optional(),
 });
 
 // GET /api/users - Get all users (Admin/Manager only)
@@ -27,6 +31,7 @@ router.get('/', authenticateToken, requireAdmin, async (req: Request, res: Respo
       select: {
         id: true,
         email: true,
+        name: true,
         role: true,
         isActive: true,
         createdAt: true,
@@ -58,6 +63,7 @@ router.get('/:id', authenticateToken, requireAdmin, async (req: Request, res: Re
       select: {
         id: true,
         email: true,
+        name: true,
         role: true,
         isActive: true,
         createdAt: true,
@@ -68,6 +74,11 @@ router.get('/:id', authenticateToken, requireAdmin, async (req: Request, res: Re
             firstName: true,
             lastName: true,
             employeeId: true,
+          },
+        },
+        managedTerminals: {
+          include: {
+            terminal: true,
           },
         },
       },
@@ -106,17 +117,29 @@ router.post('/', authenticateToken, requireAdmin, async (req: Request, res: Resp
       data: {
         email: data.email,
         password: hashedPassword,
+        name: data.name,
         role: data.role,
         isActive: data.isActive,
       },
       select: {
         id: true,
         email: true,
+        name: true,
         role: true,
         isActive: true,
         createdAt: true,
       },
     });
+
+    // If role is MANAGER and terminalIds provided, create terminal associations
+    if (data.role === 'MANAGER' && data.terminalIds && data.terminalIds.length > 0) {
+      await prisma.userTerminal.createMany({
+        data: data.terminalIds.map((terminalId: string) => ({
+          userId: user.id,
+          terminalId,
+        })),
+      });
+    }
 
     res.status(201).json(user);
   } catch (error) {
@@ -157,6 +180,7 @@ router.put('/:id', authenticateToken, requireAdmin, async (req: Request, res: Re
     const updateData: any = {};
     
     if (data.email) updateData.email = data.email;
+    if (data.name !== undefined) updateData.name = data.name;
     if (data.role) updateData.role = data.role;
     if (data.isActive !== undefined) updateData.isActive = data.isActive;
     
@@ -172,6 +196,7 @@ router.put('/:id', authenticateToken, requireAdmin, async (req: Request, res: Re
       select: {
         id: true,
         email: true,
+        name: true,
         role: true,
         isActive: true,
         updatedAt: true,
@@ -183,8 +208,48 @@ router.put('/:id', authenticateToken, requireAdmin, async (req: Request, res: Re
             employeeId: true,
           },
         },
+        managedTerminals: {
+          include: {
+            terminal: true,
+          },
+        },
       },
     });
+
+    // Log if user activation status changes and they have an associated employee
+    if (data.isActive !== undefined && data.isActive !== existingUser.isActive && user.employee) {
+      const action = data.isActive ? 'EMPLOYEE_REACTIVATED' : 'EMPLOYEE_HIDDEN';
+      const details = data.isActive 
+        ? `Employee ${user.employee.employeeId} is now visible in Employee Management due to user account activation`
+        : `Employee ${user.employee.employeeId} is now hidden from Employee Management due to user account deactivation`;
+      
+      await prisma.auditLog.create({
+        data: {
+          userId: req.user!.id,
+          action,
+          resource: 'Employee',
+          details,
+        },
+      });
+    }
+
+    // Handle terminal updates for managers
+    if (data.terminalIds !== undefined) {
+      // Remove all existing terminal associations
+      await prisma.userTerminal.deleteMany({
+        where: { userId: req.params.id },
+      });
+
+      // Create new associations if role is MANAGER
+      if ((data.role || existingUser.role) === 'MANAGER' && data.terminalIds.length > 0) {
+        await prisma.userTerminal.createMany({
+          data: data.terminalIds.map((terminalId: string) => ({
+            userId: req.params.id,
+            terminalId,
+          })),
+        });
+      }
+    }
 
     res.json(user);
   } catch (error) {

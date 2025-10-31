@@ -17,6 +17,7 @@ import {
 } from 'lucide-react';
 import apiClient from '../api/client';
 import { useAuth } from '../contexts/AuthContext';
+import { useTerminal } from '../contexts/TerminalContext';
 import LoadingSpinner from '../components/LoadingSpinner';
 
 interface Route {
@@ -56,6 +57,7 @@ interface RouteFormData {
 
 const RouteManagement = () => {
   const { user } = useAuth();
+  const { selectedTerminal } = useTerminal();
   const queryClient = useQueryClient();
   const [searchTerm, setSearchTerm] = useState('');
   const [showAddModal, setShowAddModal] = useState(false);
@@ -81,11 +83,15 @@ const RouteManagement = () => {
 
   // Fetch routes
   const { data: routes, isLoading, error } = useQuery<Route[]>({
-    queryKey: ['routes'],
+    queryKey: ['routes', selectedTerminal?.id],
     queryFn: async () => {
-      const response = await apiClient.get('/routes');
+      if (!selectedTerminal) return [];
+      const response = await apiClient.get('/routes', {
+        params: { terminalId: selectedTerminal.id }
+      });
       return response.data;
     },
+    enabled: !!selectedTerminal,
   });
 
   // Delete route mutation
@@ -113,11 +119,14 @@ const RouteManagement = () => {
   // Create route mutation
   const createRouteMutation = useMutation({
     mutationFn: async (data: RouteFormData) => {
-      const response = await apiClient.post('/routes', data);
+      const response = await apiClient.post('/routes', {
+        ...data,
+        terminalId: selectedTerminal?.id,
+      });
       return response.data;
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['routes'] });
+      queryClient.invalidateQueries({ queryKey: ['routes', selectedTerminal?.id] });
       setShowAddModal(false);
       resetForm();
     },

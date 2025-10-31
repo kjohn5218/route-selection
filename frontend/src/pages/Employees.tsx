@@ -14,10 +14,12 @@ import {
   Calendar,
   Award,
   Truck,
-  X
+  X,
+  Building2
 } from 'lucide-react';
 import apiClient from '../api/client';
 import { useAuth } from '../contexts/AuthContext';
+import { useTerminal } from '../contexts/TerminalContext';
 import LoadingSpinner from '../components/LoadingSpinner';
 
 interface Employee {
@@ -38,8 +40,16 @@ interface Employee {
   };
 }
 
+interface Terminal {
+  id: string;
+  code: string;
+  name: string;
+  isActive: boolean;
+}
+
 const Employees = () => {
   const { user } = useAuth();
+  const { selectedTerminal } = useTerminal();
   const queryClient = useQueryClient();
   const [searchTerm, setSearchTerm] = useState('');
   const [statusFilter, setStatusFilter] = useState<'all' | 'active' | 'inactive'>('all');
@@ -47,14 +57,29 @@ const Employees = () => {
   const [showEditModal, setShowEditModal] = useState(false);
   const [selectedEmployee, setSelectedEmployee] = useState<Employee | null>(null);
   const [showDeleteModal, setShowDeleteModal] = useState(false);
+  const [selectedTerminalId, setSelectedTerminalId] = useState<string>('');
 
   // Fetch employees
   const { data: employees, isLoading, error } = useQuery<Employee[]>({
-    queryKey: ['employees'],
+    queryKey: ['employees', selectedTerminal?.id],
     queryFn: async () => {
-      const response = await apiClient.get('/employees');
+      if (!selectedTerminal) return [];
+      const response = await apiClient.get('/employees', {
+        params: { terminalId: selectedTerminal.id }
+      });
       return response.data;
     },
+    enabled: !!selectedTerminal,
+  });
+
+  // Fetch all terminals (for admin to select when adding employees)
+  const { data: terminals = [] } = useQuery({
+    queryKey: ['terminals'],
+    queryFn: async () => {
+      const response = await apiClient.get('/terminals?isActive=true');
+      return response.data;
+    },
+    enabled: user?.role === 'Admin',
   });
 
   // Delete employee mutation
@@ -118,6 +143,7 @@ const Employees = () => {
 
   const handleEdit = (employee: Employee) => {
     setSelectedEmployee(employee);
+    setSelectedTerminalId(selectedTerminal?.id || '');
     setShowEditModal(true);
   };
 
@@ -164,7 +190,10 @@ const Employees = () => {
         </div>
         {user?.role !== 'Driver' && (
           <button
-            onClick={() => setShowAddModal(true)}
+            onClick={() => {
+              setSelectedTerminalId(selectedTerminal?.id || '');
+              setShowAddModal(true);
+            }}
             className="btn-primary flex items-center gap-2"
           >
             <Plus className="w-4 h-4" />
@@ -446,6 +475,15 @@ const Employees = () => {
               }}
               className="space-y-4"
             >
+              {/* Terminal Display */}
+              <div className="bg-primary-50 border border-primary-200 rounded-lg p-4 mb-4">
+                <div className="flex items-center gap-2">
+                  <Building2 className="w-4 h-4 text-primary-600" />
+                  <span className="text-sm font-medium text-primary-900">
+                    Terminal: {selectedTerminal?.code} - {selectedTerminal?.name}
+                  </span>
+                </div>
+              </div>
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 <div>
                   <label className="label" htmlFor="employeeId">Employee ID</label>
@@ -590,6 +628,7 @@ const Employees = () => {
                   doublesEndorsement: formData.get('doublesEndorsement') === 'on',
                   chainExperience: formData.get('chainExperience') === 'on',
                   isEligible: formData.get('isEligible') !== 'off',
+                  terminalId: user?.role === 'Admin' ? selectedTerminalId : selectedTerminal?.id,
                 };
                 // Include createUserAccount in the request body
                 if (formData.get('createUserAccount') === 'on') {
@@ -599,6 +638,35 @@ const Employees = () => {
               }}
               className="space-y-4"
             >
+              {/* Terminal Selection for Admin or Display for others */}
+              {user?.role === 'Admin' ? (
+                <div>
+                  <label className="label" htmlFor="add-terminalId">Terminal</label>
+                  <select
+                    id="add-terminalId"
+                    value={selectedTerminalId}
+                    onChange={(e) => setSelectedTerminalId(e.target.value)}
+                    className="input-field"
+                    required
+                  >
+                    <option value="">Select a terminal</option>
+                    {terminals.map((terminal: Terminal) => (
+                      <option key={terminal.id} value={terminal.id}>
+                        {terminal.code} - {terminal.name}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+              ) : (
+                <div className="bg-primary-50 border border-primary-200 rounded-lg p-4 mb-4">
+                  <div className="flex items-center gap-2">
+                    <Building2 className="w-4 h-4 text-primary-600" />
+                    <span className="text-sm font-medium text-primary-900">
+                      Terminal: {selectedTerminal?.code} - {selectedTerminal?.name}
+                    </span>
+                  </div>
+                </div>
+              )}
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 <div>
                   <label className="label" htmlFor="add-employeeId">Employee ID</label>

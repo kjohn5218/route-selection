@@ -2,6 +2,7 @@ import { Router, Request, Response } from 'express';
 import { z } from 'zod';
 import prisma from '../utils/database.js';
 import { authenticateToken, requireAdmin } from '../middleware/auth.js';
+import { checkTerminalAccess, validateTerminalAccess, TerminalAccessRequest } from '../middleware/terminalAccess.js';
 
 const router = Router();
 
@@ -12,6 +13,32 @@ const createTerminalSchema = z.object({
 });
 
 const updateTerminalSchema = createTerminalSchema.partial();
+
+// GET /api/terminals/accessible - Get terminals accessible by current user
+router.get('/accessible', authenticateToken, checkTerminalAccess, async (req: TerminalAccessRequest, res: Response) => {
+  try {
+    console.log('Allowed terminals for user:', req.allowedTerminals?.length);
+    const terminals = await prisma.terminal.findMany({
+      where: {
+        id: { in: req.allowedTerminals || [] },
+        isActive: true,
+      },
+      orderBy: { code: 'asc' },
+      select: {
+        id: true,
+        code: true,
+        name: true,
+        isActive: true,
+      },
+    });
+    console.log('Returning terminals:', terminals.length);
+
+    res.json(terminals);
+  } catch (error) {
+    console.error('Get accessible terminals error:', error);
+    res.status(500).json({ error: 'Internal server error' });
+  }
+});
 
 // GET /api/terminals - Get all terminals
 router.get('/', authenticateToken, async (req: Request, res: Response) => {
@@ -33,6 +60,7 @@ router.get('/', authenticateToken, async (req: Request, res: Response) => {
         isActive: true,
         _count: {
           select: {
+            users: true,
             employees: true,
             routes: true,
             periods: true,

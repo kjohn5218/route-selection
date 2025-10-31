@@ -51,6 +51,7 @@ router.post('/login', async (req: Request, res: Response) => {
       email: user.email,
       role: user.role,
       employeeId: user.employee?.id,
+      terminalId: user.terminalId || undefined,
     });
 
     res.json({
@@ -128,6 +129,7 @@ router.post('/register', async (req: Request, res: Response) => {
       email: result.user.email,
       role: result.user.role,
       employeeId: result.employee?.id,
+      terminalId: result.user.terminalId || undefined,
     });
 
     res.status(201).json({

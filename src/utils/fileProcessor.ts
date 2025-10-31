@@ -47,6 +47,7 @@ const employeeImportSchema = z.object({
   doublesEndorsement: z.boolean().default(false),
   chainExperience: z.boolean().default(false),
   isEligible: z.boolean().default(true),
+  terminal: z.string(),
 });
 
 export interface ImportResult<T> {
@@ -278,6 +279,7 @@ export class FileProcessor {
           doublesEndorsement: this.parseBoolean(row.doublesEndorsement),
           chainExperience: this.parseBoolean(row.chainExperience),
           isEligible: row.isEligible !== undefined ? this.parseBoolean(row.isEligible) : true,
+          terminal: row.terminal || row.Terminal || row.terminalCode || row.terminal_code || '',
         };
 
         const validatedRow = employeeImportSchema.parse(processedRow);
@@ -347,6 +349,7 @@ export class FileProcessor {
         requiresDoublesEndorsement: true,
         requiresChainExperience: false,
         isActive: true,
+        _comment: 'Terminal is automatically set from the import page selection',
       },
       {
         runNumber: '2',
@@ -407,6 +410,7 @@ export class FileProcessor {
         email: 'aryeemingle@gmail.com',
         phone: '334-590-5191',
         hireDate: '03/24/2025',
+        terminal: 'DEN',
         doublesEndorsement: true,
         chainExperience: true,
         isEligible: true,
@@ -418,6 +422,7 @@ export class FileProcessor {
         email: 'truckerbeale2968@gmail.com',
         phone: '303-520-1507',
         hireDate: '07/23/2012',
+        terminal: 'DEN',
         doublesEndorsement: true,
         chainExperience: true,
         isEligible: true,
@@ -429,6 +434,7 @@ export class FileProcessor {
         email: 'e_d97@hotmail.com',
         phone: '720-308-3850',
         hireDate: '08/09/2022',
+        terminal: 'DEN',
         doublesEndorsement: false,
         chainExperience: false,
         isEligible: true,
@@ -440,6 +446,7 @@ export class FileProcessor {
         email: 'rjfoss030362@msn.com',
         phone: '303-915-8716',
         hireDate: '11/14/2005',
+        terminal: 'DEN',
         doublesEndorsement: true,
         chainExperience: true,
         isEligible: true,

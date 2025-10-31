@@ -21,6 +21,7 @@ import {
 } from 'lucide-react';
 import apiClient from '../api/client';
 import { useAuth } from '../contexts/AuthContext';
+import { useTerminal } from '../contexts/TerminalContext';
 import LoadingSpinner from '../components/LoadingSpinner';
 
 interface SelectionPeriod {
@@ -48,6 +49,7 @@ interface PeriodFormData {
 
 const Periods = () => {
   const { user } = useAuth();
+  const { selectedTerminal } = useTerminal();
   const navigate = useNavigate();
   const queryClient = useQueryClient();
   const [searchTerm, setSearchTerm] = useState('');
@@ -68,26 +70,40 @@ const Periods = () => {
 
   // Fetch periods
   const { data: periods, isLoading, error } = useQuery<SelectionPeriod[]>({
-    queryKey: ['periods'],
+    queryKey: ['periods', selectedTerminal?.id],
     queryFn: async () => {
-      const response = await apiClient.get('/periods');
+      if (!selectedTerminal) return [];
+      const response = await apiClient.get('/periods', {
+        params: { terminalId: selectedTerminal.id }
+      });
       return response.data;
     },
+    enabled: !!selectedTerminal,
   });
 
   // Fetch all active routes for selection
   const { data: allRoutes = [] } = useQuery<any[]>({
-    queryKey: ['routes', 'active'],
+    queryKey: ['routes', 'active', selectedTerminal?.id],
     queryFn: async () => {
-      const response = await apiClient.get('/routes?isActive=true');
+      if (!selectedTerminal) return [];
+      const response = await apiClient.get('/routes', {
+        params: { 
+          isActive: true,
+          terminalId: selectedTerminal.id
+        }
+      });
       return response.data;
     },
+    enabled: !!selectedTerminal,
   });
 
   // Create period mutation
   const createPeriodMutation = useMutation({
     mutationFn: async (data: PeriodFormData) => {
-      const response = await apiClient.post('/periods', data);
+      const response = await apiClient.post('/periods', {
+        ...data,
+        terminalId: selectedTerminal?.id,
+      });
       return response.data;
     },
     onSuccess: () => {

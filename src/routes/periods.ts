@@ -13,6 +13,7 @@ const createPeriodSchema = z.object({
   endDate: z.string().regex(/^\d{4}-\d{2}-\d{2}$/, 'Date must be in YYYY-MM-DD format'),
   routeIds: z.array(z.string()).optional(),
   requiredSelections: z.number().min(1).max(3).optional().default(3),
+  terminalId: z.string(),
 });
 
 const updatePeriodSchema = z.object({
@@ -28,7 +29,15 @@ const updatePeriodSchema = z.object({
 // GET /api/periods - Get all selection periods
 router.get('/', authenticateToken, async (req: Request, res: Response) => {
   try {
+    const { terminalId } = req.query;
+    
+    const where: any = {};
+    if (terminalId) {
+      where.terminalId = terminalId as string;
+    }
+    
     const periods = await prisma.selectionPeriod.findMany({
+      where,
       orderBy: { createdAt: 'desc' },
       include: {
         selections: {
@@ -74,12 +83,20 @@ router.get('/', authenticateToken, async (req: Request, res: Response) => {
 // GET /api/periods/active - Get currently active period
 router.get('/active', authenticateToken, async (req: Request, res: Response) => {
   try {
+    const { terminalId } = req.query;
+    
+    const where: any = {
+      status: 'OPEN',
+      startDate: { lte: new Date() },
+      endDate: { gte: new Date() },
+    };
+    
+    if (terminalId) {
+      where.terminalId = terminalId as string;
+    }
+    
     const activePeriod = await prisma.selectionPeriod.findFirst({
-      where: {
-        status: 'OPEN',
-        startDate: { lte: new Date() },
-        endDate: { gte: new Date() },
-      },
+      where,
       include: {
         selections: {
           select: {
@@ -230,6 +247,7 @@ router.post('/', authenticateToken, requireAdmin, async (req: Request, res: Resp
 
     const overlappingPeriod = await prisma.selectionPeriod.findFirst({
       where: {
+        terminalId: data.terminalId,
         OR: [
           {
             AND: [
@@ -266,6 +284,7 @@ router.post('/', authenticateToken, requireAdmin, async (req: Request, res: Resp
         startDate,
         endDate,
         requiredSelections: data.requiredSelections || 3,
+        terminalId: data.terminalId,
         routes: data.routeIds && data.routeIds.length > 0 ? {
           create: data.routeIds.map(routeId => ({
             routeId,
@@ -680,6 +699,7 @@ router.post('/:id/notify', authenticateToken, requireAdmin, async (req: Request,
     const allEligibleEmployees = await prisma.employee.findMany({
       where: {
         isEligible: true,
+        terminalId: period.terminalId,
       },
       include: {
         user: {

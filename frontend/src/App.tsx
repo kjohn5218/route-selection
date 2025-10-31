@@ -1,6 +1,7 @@
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { AuthProvider } from './contexts/AuthContext';
+import { TerminalProvider } from './contexts/TerminalContext';
 import Layout from './components/Layout';
 import ProtectedRoute from './components/ProtectedRoute';
 import Login from './pages/Login';
@@ -14,6 +15,7 @@ import SelectionManagement from './pages/SelectionManagement';
 import ForgotPassword from './pages/ForgotPassword';
 import ResetPassword from './pages/ResetPassword';
 import Users from './pages/Users';
+import Terminals from './pages/Terminals';
 
 const queryClient = new QueryClient({
   defaultOptions: {
@@ -29,18 +31,19 @@ function App() {
     <QueryClientProvider client={queryClient}>
       <BrowserRouter>
         <AuthProvider>
-          <Routes>
-            <Route path="/login" element={<Login />} />
-            <Route path="/forgot-password" element={<ForgotPassword />} />
-            <Route path="/reset-password" element={<ResetPassword />} />
-            <Route
-              path="/"
-              element={
-                <ProtectedRoute>
-                  <Layout />
-                </ProtectedRoute>
-              }
-            >
+          <TerminalProvider>
+            <Routes>
+              <Route path="/login" element={<Login />} />
+              <Route path="/forgot-password" element={<ForgotPassword />} />
+              <Route path="/reset-password" element={<ResetPassword />} />
+              <Route
+                path="/"
+                element={
+                  <ProtectedRoute>
+                    <Layout />
+                  </ProtectedRoute>
+                }
+              >
               <Route index element={<Navigate to="/dashboard" replace />} />
               <Route path="dashboard" element={<Dashboard />} />
               <Route path="employees" element={<Employees />} />
@@ -50,8 +53,10 @@ function App() {
               <Route path="selections" element={<Selections />} />
               <Route path="import-export" element={<ImportExport />} />
               <Route path="users" element={<Users />} />
+              <Route path="terminals" element={<Terminals />} />
             </Route>
           </Routes>
+          </TerminalProvider>
         </AuthProvider>
       </BrowserRouter>
     </QueryClientProvider>

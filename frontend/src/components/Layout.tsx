@@ -1,5 +1,6 @@
 import { Link, Outlet, useNavigate, useLocation } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
+import { useTerminal } from '../contexts/TerminalContext';
 import { 
   Home, 
   Users, 
@@ -14,16 +15,19 @@ import {
   Search,
   ChevronDown,
   Truck,
-  UserCircle
+  UserCircle,
+  Building2
 } from 'lucide-react';
 import { useState } from 'react';
 
 const Layout = () => {
   const { user, logout } = useAuth();
+  const { terminals, selectedTerminal, setSelectedTerminal } = useTerminal();
   const navigate = useNavigate();
   const location = useLocation();
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [profileDropdownOpen, setProfileDropdownOpen] = useState(false);
+  const [terminalDropdownOpen, setTerminalDropdownOpen] = useState(false);
 
   const handleLogout = () => {
     logout();
@@ -38,6 +42,7 @@ const Layout = () => {
     { path: '/selections', label: 'My Selections', icon: CheckSquare, adminLabel: 'Selection Results' },
     { path: '/import-export', label: 'Import/Export', icon: FileUp, roles: ['Admin'] },
     { path: '/users', label: 'User Management', icon: UserCircle, roles: ['Admin', 'Manager'] },
+    { path: '/terminals', label: 'Terminal Management', icon: Building2, roles: ['Admin'] },
   ];
 
   const isActive = (path: string) => location.pathname === path;
@@ -157,8 +162,47 @@ const Layout = () => {
 
               {/* Right side actions */}
               <div className="flex items-center gap-2 sm:gap-4">
+                {/* Terminal Selector */}
+                <div className="relative">
+                  <button
+                    onClick={() => setTerminalDropdownOpen(!terminalDropdownOpen)}
+                    className="flex items-center gap-2 px-3 py-2 bg-gray-50 hover:bg-gray-100 border border-gray-200 rounded-lg transition-all text-sm"
+                  >
+                    <Building2 className="w-4 h-4 text-gray-500" />
+                    <span className="hidden sm:inline font-medium text-gray-700">
+                      {selectedTerminal?.code || 'Select Terminal'}
+                    </span>
+                    <ChevronDown className="w-4 h-4 text-gray-500" />
+                  </button>
+                  
+                  {/* Terminal Dropdown */}
+                  {terminalDropdownOpen && (
+                    <div className="absolute right-0 mt-2 w-64 bg-white rounded-lg shadow-lg border border-gray-200 py-2 z-50 max-h-96 overflow-y-auto">
+                      {terminals.map((terminal) => (
+                        <button
+                          key={terminal.id}
+                          onClick={() => {
+                            setSelectedTerminal(terminal);
+                            setTerminalDropdownOpen(false);
+                            window.location.reload(); // Reload to fetch terminal-specific data
+                          }}
+                          className={`w-full text-left px-4 py-2 hover:bg-gray-50 transition-colors flex items-center gap-3 ${
+                            selectedTerminal?.id === terminal.id ? 'bg-primary-50 text-primary-700' : 'text-gray-700'
+                          }`}
+                        >
+                          <Building2 className="w-4 h-4 flex-shrink-0" />
+                          <div>
+                            <div className="font-medium">{terminal.code}</div>
+                            <div className="text-xs text-gray-500">{terminal.name}</div>
+                          </div>
+                        </button>
+                      ))}
+                    </div>
+                  )}
+                </div>
+
                 {/* Search (hidden on mobile) */}
-                <div className="hidden sm:block relative">
+                <div className="hidden lg:block relative">
                   <Search className="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
                   <input
                     type="text"

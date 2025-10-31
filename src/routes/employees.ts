@@ -2,6 +2,7 @@ import { Router, Request, Response } from 'express';
 import { z } from 'zod';
 import prisma from '../utils/database.js';
 import { authenticateToken, requireAdmin, requireAdminOrSelf } from '../middleware/auth.js';
+import { checkTerminalAccess, validateTerminalAccess, TerminalAccessRequest } from '../middleware/terminalAccess.js';
 
 const router = Router();
 
@@ -15,21 +16,34 @@ const createEmployeeSchema = z.object({
   doublesEndorsement: z.boolean().default(false),
   chainExperience: z.boolean().default(false),
   isEligible: z.boolean().default(true),
+  terminalId: z.string(),
 });
 
 const updateEmployeeSchema = createEmployeeSchema.partial();
 
 // GET /api/employees - Get all employees with optional filtering
-router.get('/', authenticateToken, requireAdmin, async (req: Request, res: Response) => {
+router.get('/', authenticateToken, requireAdmin, checkTerminalAccess, async (req: TerminalAccessRequest, res: Response) => {
   try {
     const {
       isEligible,
       doublesEndorsement,
       chainExperience,
       searchTerm,
+      terminalId,
     } = req.query;
 
     const where: any = {};
+
+    // Filter by terminal - ensure user has access
+    if (terminalId) {
+      if (!req.allowedTerminals?.includes(terminalId as string)) {
+        return res.status(403).json({ error: 'Access denied to this terminal' });
+      }
+      where.terminalId = terminalId as string;
+    } else if (req.user?.role !== 'ADMIN' && req.allowedTerminals && req.allowedTerminals.length > 0) {
+      // For non-admins, limit to their allowed terminals
+      where.terminalId = { in: req.allowedTerminals };
+    }
 
     if (isEligible !== undefined) {
       where.isEligible = isEligible === 'true';
@@ -41,6 +55,17 @@ router.get('/', authenticateToken, requireAdmin, async (req: Request, res: Respo
 
     if (chainExperience !== undefined) {
       where.chainExperience = chainExperience === 'true';
+    }
+
+    // Get emails of inactive users
+    const inactiveUserEmails = await prisma.user.findMany({
+      where: { isActive: false },
+      select: { email: true }
+    }).then(users => users.map(u => u.email));
+
+    // Add filter to exclude employees with inactive user accounts
+    if (inactiveUserEmails.length > 0) {
+      where.email = { notIn: inactiveUserEmails };
     }
 
     if (searchTerm) {
@@ -60,6 +85,13 @@ router.get('/', authenticateToken, requireAdmin, async (req: Request, res: Respo
         { lastName: 'asc' },
       ],
       include: {
+        user: {
+          select: {
+            id: true,
+            role: true,
+            isActive: true,
+          },
+        },
         route: {
           select: {
             id: true,
@@ -113,10 +145,21 @@ router.get('/', authenticateToken, requireAdmin, async (req: Request, res: Respo
 // GET /api/employees/seniority - Get employees sorted by seniority
 router.get('/seniority', authenticateToken, requireAdmin, async (req: Request, res: Response) => {
   try {
+    // Get emails of inactive users
+    const inactiveUserEmails = await prisma.user.findMany({
+      where: { isActive: false },
+      select: { email: true }
+    }).then(users => users.map(u => u.email));
+
+    const where: any = { isEligible: true };
+    
+    // Exclude employees with inactive user accounts
+    if (inactiveUserEmails.length > 0) {
+      where.email = { notIn: inactiveUserEmails };
+    }
+
     const employees = await prisma.employee.findMany({
-      where: {
-        isEligible: true,
-      },
+      where,
       orderBy: [
         { hireDate: 'asc' },
         { lastName: 'asc' },
@@ -157,6 +200,7 @@ router.get('/:id', authenticateToken, requireAdminOrSelf, async (req: Request, r
             id: true,
             email: true,
             role: true,
+            isActive: true,
           },
         },
         route: true,
@@ -230,6 +274,11 @@ router.get('/:id', authenticateToken, requireAdminOrSelf, async (req: Request, r
     });
 
     if (!employee) {
+      return res.status(404).json({ error: 'Employee not found' });
+    }
+
+    // Check if employee has an inactive user account
+    if (employee.user && !employee.user.isActive) {
       return res.status(404).json({ error: 'Employee not found' });
     }
 

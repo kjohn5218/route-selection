@@ -25,6 +25,7 @@ export const authenticateToken = (req: Request, res: Response, next: NextFunctio
       email: decoded.email,
       role: decoded.role as 'ADMIN' | 'DRIVER' | 'MANAGER',
       employeeId: decoded.employeeId,
+      terminalId: decoded.terminalId,
     };
 
     next();

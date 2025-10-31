@@ -8,11 +8,14 @@ const router = Router();
 // GET /api/export/routes - Export routes to Excel/CSV
 router.get('/routes', authenticateToken, requireAdmin, async (req: Request, res: Response) => {
   try {
-    const { format = 'xlsx', includeInactive = 'false' } = req.query;
+    const { format = 'xlsx', includeInactive = 'false', terminalId } = req.query;
 
     const where: any = {};
     if (includeInactive !== 'true') {
       where.isActive = true;
+    }
+    if (terminalId) {
+      where.terminalId = terminalId as string;
     }
 
     const routes = await prisma.route.findMany({
@@ -69,11 +72,14 @@ router.get('/routes', authenticateToken, requireAdmin, async (req: Request, res:
 // GET /api/export/employees - Export employees to Excel/CSV
 router.get('/employees', authenticateToken, requireAdmin, async (req: Request, res: Response) => {
   try {
-    const { format = 'xlsx', includeIneligible = 'false' } = req.query;
+    const { format = 'xlsx', includeIneligible = 'false', terminalId } = req.query;
 
     const where: any = {};
     if (includeIneligible !== 'true') {
       where.isEligible = true;
+    }
+    if (terminalId) {
+      where.terminalId = terminalId as string;
     }
 
     const employees = await prisma.employee.findMany({
@@ -92,6 +98,11 @@ router.get('/employees', authenticateToken, requireAdmin, async (req: Request, r
         doublesEndorsement: true,
         chainExperience: true,
         isEligible: true,
+        terminal: {
+          select: {
+            code: true,
+          },
+        },
         route: {
           select: {
             runNumber: true,
@@ -110,6 +121,7 @@ router.get('/employees', authenticateToken, requireAdmin, async (req: Request, r
       email: employee.email,
       phone: employee.phone,
       hireDate: employee.hireDate.toISOString().split('T')[0],
+      terminal: employee.terminal?.code || '',
       doublesEndorsement: employee.doublesEndorsement,
       chainExperience: employee.chainExperience,
       isEligible: employee.isEligible,

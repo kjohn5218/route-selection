@@ -3,6 +3,7 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { AlertCircle, CheckCircle, Route, Calendar, Clock, MapPin, Truck, AlertTriangle, Search, Download, Mail, FileSpreadsheet, Filter, Users } from 'lucide-react';
 import apiClient from '../api/client';
 import { useAuth } from '../contexts/AuthContext';
+import { useTerminal } from '../contexts/TerminalContext';
 import { Link } from 'react-router-dom';
 
 interface Route {
@@ -45,6 +46,7 @@ interface Selection {
 
 const Selections = () => {
   const { user } = useAuth();
+  const { selectedTerminal } = useTerminal();
   const queryClient = useQueryClient();
   const [selectedChoices, setSelectedChoices] = useState<{
     firstChoiceId: string | null;
@@ -61,12 +63,16 @@ const Selections = () => {
 
   // Get active selection period
   const { data: activePeriod, isLoading: periodLoading, error: periodError } = useQuery<SelectionPeriod | null>({
-    queryKey: ['active-selection-period'],
+    queryKey: ['active-selection-period', selectedTerminal?.id],
     queryFn: async () => {
-      const response = await apiClient.get('/periods/active');
+      if (!selectedTerminal) return null;
+      const response = await apiClient.get('/periods/active', {
+        params: { terminalId: selectedTerminal.id }
+      });
       console.log('Active period response:', response.data);
       return response.data;
     },
+    enabled: !!selectedTerminal,
   });
 
   // Get available routes
@@ -802,6 +808,7 @@ const Selections = () => {
 // Admin Selection Results Component
 const AdminSelectionResults = () => {
   const queryClient = useQueryClient();
+  const { selectedTerminal } = useTerminal();
   const [selectedPeriodId, setSelectedPeriodId] = useState<string>('');
   const [searchTerm, setSearchTerm] = useState('');
   const [filterStatus, setFilterStatus] = useState<string>('ALL');
@@ -810,11 +817,15 @@ const AdminSelectionResults = () => {
 
   // Get all selection periods
   const { data: selectionPeriods = [] } = useQuery<SelectionPeriod[]>({
-    queryKey: ['selection-periods'],
+    queryKey: ['selection-periods', selectedTerminal?.id],
     queryFn: async () => {
-      const response = await apiClient.get('/periods');
+      if (!selectedTerminal) return [];
+      const response = await apiClient.get('/periods', {
+        params: { terminalId: selectedTerminal.id }
+      });
       return response.data;
     },
+    enabled: !!selectedTerminal,
   });
 
   // Get selections for selected period

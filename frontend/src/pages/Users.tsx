@@ -18,6 +18,7 @@ import LoadingSpinner from '../components/LoadingSpinner';
 interface User {
   id: string;
   email: string;
+  name?: string;
   role: 'ADMIN' | 'MANAGER' | 'DRIVER';
   isActive: boolean;
   createdAt: string;
@@ -28,6 +29,20 @@ interface User {
     lastName: string;
     employeeId: string;
   };
+  managedTerminals?: {
+    terminal: {
+      id: string;
+      code: string;
+      name: string;
+    };
+  }[];
+}
+
+interface Terminal {
+  id: string;
+  code: string;
+  name: string;
+  isActive: boolean;
 }
 
 const UsersPage = () => {
@@ -38,6 +53,9 @@ const UsersPage = () => {
   const [showEditModal, setShowEditModal] = useState(false);
   const [selectedUser, setSelectedUser] = useState<User | null>(null);
   const [showDeleteModal, setShowDeleteModal] = useState(false);
+  const [addUserRole, setAddUserRole] = useState('DRIVER');
+  const [editUserRole, setEditUserRole] = useState('DRIVER');
+  const [editUserIsActive, setEditUserIsActive] = useState(true);
 
   // Fetch users
   const { data: users, isLoading, error } = useQuery<User[]>({
@@ -46,6 +64,16 @@ const UsersPage = () => {
       const response = await apiClient.get('/users');
       return response.data;
     },
+  });
+
+  // Fetch all terminals (for admin to assign to managers)
+  const { data: terminals = [] } = useQuery<Terminal[]>({
+    queryKey: ['terminals'],
+    queryFn: async () => {
+      const response = await apiClient.get('/terminals?isActive=true');
+      return response.data;
+    },
+    enabled: currentUser?.role === 'ADMIN',
   });
 
   // Create user mutation
@@ -70,10 +98,22 @@ const UsersPage = () => {
       const response = await apiClient.put(`/users/${id}`, data);
       return response.data;
     },
-    onSuccess: () => {
+    onSuccess: (data, variables) => {
       queryClient.invalidateQueries({ queryKey: ['users'] });
+      queryClient.invalidateQueries({ queryKey: ['employees'] });
+      
+      // Show alert if user activation status changed and had an associated employee
+      if (selectedUser?.employee && selectedUser.isActive !== variables.isActive) {
+        if (variables.isActive) {
+          alert(`User account activated. The associated employee ${selectedUser.employee.firstName} ${selectedUser.employee.lastName} is now visible in the Employee Management page.`);
+        } else {
+          alert(`User account deactivated. The associated employee ${selectedUser.employee.firstName} ${selectedUser.employee.lastName} has been hidden from the Employee Management page.`);
+        }
+      }
+      
       setShowEditModal(false);
       setSelectedUser(null);
+      setEditUserIsActive(true);
     },
     onError: (error: any) => {
       console.error('Failed to update user:', error);
@@ -99,6 +139,7 @@ const UsersPage = () => {
 
   const filteredUsers = users?.filter(user =>
     user.email.toLowerCase().includes(searchTerm.toLowerCase()) ||
+    user.name?.toLowerCase().includes(searchTerm.toLowerCase()) ||
     user.employee?.firstName?.toLowerCase().includes(searchTerm.toLowerCase()) ||
     user.employee?.lastName?.toLowerCase().includes(searchTerm.toLowerCase())
   ) || [];
@@ -127,6 +168,8 @@ const UsersPage = () => {
 
   const handleEdit = (user: User) => {
     setSelectedUser(user);
+    setEditUserRole(user.role);
+    setEditUserIsActive(user.isActive);
     setShowEditModal(true);
   };
 
@@ -221,10 +264,10 @@ const UsersPage = () => {
                       </div>
                       <div>
                         <p className="font-medium text-gray-900">
-                          {user.employee ? 
+                          {user.name || (user.employee ? 
                             `${user.employee.firstName} ${user.employee.lastName}` :
-                            'No Employee Record'
-                          }
+                            'No Name Set'
+                          )}
                         </p>
                         {user.employee && (
                           <p className="text-sm text-gray-500">ID: {user.employee.employeeId}</p>
@@ -234,10 +277,17 @@ const UsersPage = () => {
                   </td>
                   <td className="py-4 px-6 text-gray-700">{user.email}</td>
                   <td className="py-4 px-6">
-                    <span className={`inline-flex items-center gap-1 px-2 py-1 rounded-full text-xs font-medium ${getRoleBadgeClass(user.role)}`}>
-                      {getRoleIcon(user.role)}
-                      {user.role}
-                    </span>
+                    <div className="space-y-1">
+                      <span className={`inline-flex items-center gap-1 px-2 py-1 rounded-full text-xs font-medium ${getRoleBadgeClass(user.role)}`}>
+                        {getRoleIcon(user.role)}
+                        {user.role}
+                      </span>
+                      {user.role === 'MANAGER' && user.managedTerminals && user.managedTerminals.length > 0 && (
+                        <div className="text-xs text-gray-500 mt-1">
+                          Terminals: {user.managedTerminals.map(mt => mt.terminal.code).join(', ')}
+                        </div>
+                      )}
+                    </div>
                   </td>
                   <td className="py-4 px-6">
                     <span className={`inline-flex items-center px-2 py-1 rounded-full text-xs font-medium ${
@@ -326,7 +376,10 @@ const UsersPage = () => {
             <div className="flex items-center justify-between mb-6">
               <h3 className="text-lg font-semibold text-gray-900">Add New User</h3>
               <button
-                onClick={() => setShowAddModal(false)}
+                onClick={() => {
+                  setShowAddModal(false);
+                  setAddUserRole('DRIVER');
+                }}
                 className="p-2 hover:bg-gray-100 rounded-lg transition-colors"
               >
                 <X className="w-5 h-5 text-gray-500" />
@@ -336,15 +389,31 @@ const UsersPage = () => {
               onSubmit={(e) => {
                 e.preventDefault();
                 const formData = new FormData(e.currentTarget);
+                const role = formData.get('role') as string;
+                const selectedTerminalIds = role === 'MANAGER' 
+                  ? Array.from(formData.getAll('terminalIds')) as string[]
+                  : [];
                 createUserMutation.mutate({
                   email: formData.get('email') as string,
                   password: formData.get('password') as string,
-                  role: formData.get('role') as string,
+                  name: formData.get('name') as string || undefined,
+                  role,
                   isActive: formData.get('isActive') === 'on',
+                  terminalIds: selectedTerminalIds,
                 });
               }}
               className="space-y-4"
             >
+              <div>
+                <label className="label" htmlFor="add-name">User Name</label>
+                <input
+                  type="text"
+                  id="add-name"
+                  name="name"
+                  className="input-field"
+                  placeholder="John Doe"
+                />
+              </div>
               <div>
                 <label className="label" htmlFor="add-email">Email</label>
                 <input
@@ -375,12 +444,33 @@ const UsersPage = () => {
                   name="role"
                   className="input-field"
                   required
+                  value={addUserRole}
+                  onChange={(e) => setAddUserRole(e.target.value)}
                 >
                   <option value="DRIVER">Driver</option>
                   <option value="MANAGER">Manager</option>
                   <option value="ADMIN">Administrator</option>
                 </select>
               </div>
+              {addUserRole === 'MANAGER' && currentUser?.role === 'ADMIN' && (
+                <div>
+                  <label className="label">Assigned Terminals</label>
+                  <div className="space-y-2 max-h-48 overflow-y-auto border border-gray-200 rounded-lg p-3">
+                    {terminals.map(terminal => (
+                      <label key={terminal.id} className="flex items-center gap-3">
+                        <input
+                          type="checkbox"
+                          name="terminalIds"
+                          value={terminal.id}
+                          className="w-4 h-4 text-primary-600 border-gray-300 rounded focus:ring-primary-500"
+                        />
+                        <span className="text-sm text-gray-700">{terminal.code} - {terminal.name}</span>
+                      </label>
+                    ))}
+                  </div>
+                  <p className="text-xs text-gray-500 mt-1">Select terminals this manager can access</p>
+                </div>
+              )}
               <div>
                 <label className="flex items-center gap-3">
                   <input
@@ -395,7 +485,10 @@ const UsersPage = () => {
               <div className="flex gap-3 justify-end pt-4">
                 <button
                   type="button"
-                  onClick={() => setShowAddModal(false)}
+                  onClick={() => {
+                    setShowAddModal(false);
+                    setAddUserRole('DRIVER');
+                  }}
                   className="btn-secondary"
                 >
                   Cancel
@@ -420,7 +513,10 @@ const UsersPage = () => {
             <div className="flex items-center justify-between mb-6">
               <h3 className="text-lg font-semibold text-gray-900">Edit User</h3>
               <button
-                onClick={() => setShowEditModal(false)}
+                onClick={() => {
+                  setShowEditModal(false);
+                  setEditUserRole('DRIVER');
+                }}
                 className="p-2 hover:bg-gray-100 rounded-lg transition-colors"
               >
                 <X className="w-5 h-5 text-gray-500" />
@@ -430,11 +526,17 @@ const UsersPage = () => {
               onSubmit={(e) => {
                 e.preventDefault();
                 const formData = new FormData(e.currentTarget);
+                const role = formData.get('role') as string;
+                const selectedTerminalIds = role === 'MANAGER' 
+                  ? Array.from(formData.getAll('terminalIds')) as string[]
+                  : [];
                 const updateData: any = {
                   id: selectedUser.id,
                   email: formData.get('email') as string,
-                  role: formData.get('role') as string,
-                  isActive: formData.get('isActive') === 'on',
+                  name: formData.get('name') as string || undefined,
+                  role,
+                  isActive: editUserIsActive,
+                  terminalIds: selectedTerminalIds,
                 };
                 
                 const password = formData.get('password') as string;
@@ -446,6 +548,17 @@ const UsersPage = () => {
               }}
               className="space-y-4"
             >
+              <div>
+                <label className="label" htmlFor="edit-name">User Name</label>
+                <input
+                  type="text"
+                  id="edit-name"
+                  name="name"
+                  defaultValue={selectedUser.name || ''}
+                  className="input-field"
+                  placeholder="John Doe"
+                />
+              </div>
               <div>
                 <label className="label" htmlFor="edit-email">Email</label>
                 <input
@@ -477,28 +590,62 @@ const UsersPage = () => {
                   className="input-field"
                   required
                   disabled={selectedUser.id === currentUser?.id}
+                  value={editUserRole}
+                  onChange={(e) => setEditUserRole(e.target.value)}
                 >
                   <option value="DRIVER">Driver</option>
                   <option value="MANAGER">Manager</option>
                   <option value="ADMIN">Administrator</option>
                 </select>
               </div>
+              {editUserRole === 'MANAGER' && currentUser?.role === 'ADMIN' && selectedUser.id !== currentUser?.id && (
+                <div>
+                  <label className="label">Assigned Terminals</label>
+                  <div className="space-y-2 max-h-48 overflow-y-auto border border-gray-200 rounded-lg p-3">
+                    {terminals.map(terminal => (
+                      <label key={terminal.id} className="flex items-center gap-3">
+                        <input
+                          type="checkbox"
+                          name="terminalIds"
+                          value={terminal.id}
+                          defaultChecked={selectedUser.managedTerminals?.some(mt => mt.terminal.id === terminal.id)}
+                          className="w-4 h-4 text-primary-600 border-gray-300 rounded focus:ring-primary-500"
+                        />
+                        <span className="text-sm text-gray-700">{terminal.code} - {terminal.name}</span>
+                      </label>
+                    ))}
+                  </div>
+                  <p className="text-xs text-gray-500 mt-1">Select terminals this manager can access</p>
+                </div>
+              )}
               <div>
                 <label className="flex items-center gap-3">
                   <input
                     type="checkbox"
                     name="isActive"
-                    defaultChecked={selectedUser.isActive}
+                    checked={editUserIsActive}
+                    onChange={(e) => setEditUserIsActive(e.target.checked)}
                     className="w-4 h-4 text-primary-600 border-gray-300 rounded focus:ring-primary-500"
                     disabled={selectedUser.id === currentUser?.id}
                   />
                   <span className="text-sm font-medium text-gray-700">Account Active</span>
                 </label>
+                {selectedUser.employee && selectedUser.isActive && !editUserIsActive && (
+                  <div className="mt-2 p-3 bg-amber-50 border border-amber-200 rounded-lg">
+                    <p className="text-sm text-amber-800">
+                      <strong>Warning:</strong> Deactivating this user account will hide the associated employee ({selectedUser.employee.firstName} {selectedUser.employee.lastName}) from the Employee Management page.
+                    </p>
+                  </div>
+                )}
               </div>
               <div className="flex gap-3 justify-end pt-4">
                 <button
                   type="button"
-                  onClick={() => setShowEditModal(false)}
+                  onClick={() => {
+                    setShowEditModal(false);
+                    setEditUserRole('DRIVER');
+                    setEditUserIsActive(true);
+                  }}
                   className="btn-secondary"
                 >
                   Cancel

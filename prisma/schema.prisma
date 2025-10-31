@@ -18,6 +18,7 @@ model Terminal {
   employees   Employee[]
   routes      Route[]
   periods     SelectionPeriod[]
+  userTerminals UserTerminal[]
 
   @@map("terminals")
 }
@@ -26,6 +27,7 @@ model User {
   id         String     @id @default(cuid())
   email      String     @unique
   password   String
+  name       String?
   role       String     @default("DRIVER")
   isActive   Boolean    @default(true)
   terminalId String?
@@ -35,6 +37,7 @@ model User {
   terminal   Terminal?  @relation(fields: [terminalId], references: [id])
   passwordResetTokens PasswordResetToken[]
   auditLogs  AuditLog[]
+  managedTerminals UserTerminal[]
 
   @@map("users")
 }
@@ -203,4 +206,16 @@ model PasswordResetToken {
   @@index([token])
   @@index([userId])
   @@map("password_reset_tokens")
+}
+
+model UserTerminal {
+  userId     String
+  terminalId String
+  createdAt  DateTime  @default(now())
+  
+  user       User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  terminal   Terminal  @relation(fields: [terminalId], references: [id], onDelete: Cascade)
+
+  @@id([userId, terminalId])
+  @@map("user_terminals")
 }

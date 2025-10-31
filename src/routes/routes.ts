@@ -3,6 +3,7 @@ import { z } from 'zod';
 import prisma from '../utils/database.js';
 import { authenticateToken, requireAdmin } from '../middleware/auth.js';
 import { RouteFilters } from '../types/index.js';
+import { checkTerminalAccess, validateTerminalAccess, TerminalAccessRequest } from '../middleware/terminalAccess.js';
 
 const router = Router();
 
@@ -20,12 +21,13 @@ const createRouteSchema = z.object({
   requiresDoublesEndorsement: z.boolean().default(false),
   requiresChainExperience: z.boolean().default(false),
   isActive: z.boolean().default(true),
+  terminalId: z.string(),
 });
 
 const updateRouteSchema = createRouteSchema.partial();
 
 // GET /api/routes - Get all routes with optional filtering
-router.get('/', authenticateToken, async (req: Request, res: Response) => {
+router.get('/', authenticateToken, checkTerminalAccess, async (req: TerminalAccessRequest, res: Response) => {
   try {
     const {
       type,
@@ -33,9 +35,21 @@ router.get('/', authenticateToken, async (req: Request, res: Response) => {
       requiresChainExperience,
       searchTerm,
       isActive,
+      terminalId,
     } = req.query;
 
     const where: any = {};
+
+    // Filter by terminal - ensure user has access
+    if (terminalId) {
+      if (!req.allowedTerminals?.includes(terminalId as string)) {
+        return res.status(403).json({ error: 'Access denied to this terminal' });
+      }
+      where.terminalId = terminalId as string;
+    } else if (req.user?.role !== 'ADMIN' && req.allowedTerminals && req.allowedTerminals.length > 0) {
+      // For non-admins, limit to their allowed terminals
+      where.terminalId = { in: req.allowedTerminals };
+    }
 
     if (isActive !== undefined) {
       where.isActive = isActive === 'true';
@@ -286,13 +300,21 @@ router.get('/:id', authenticateToken, async (req: Request, res: Response) => {
 });
 
 // POST /api/routes - Create new route (Admin only)
-router.post('/', authenticateToken, requireAdmin, async (req: Request, res: Response) => {
+router.post('/', authenticateToken, requireAdmin, checkTerminalAccess, async (req: TerminalAccessRequest, res: Response) => {
   try {
     const data = createRouteSchema.parse(req.body);
 
-    // Check if run number already exists
-    const existingRoute = await prisma.route.findUnique({
-      where: { runNumber: data.runNumber },
+    // Validate terminal access
+    if (!req.allowedTerminals?.includes(data.terminalId)) {
+      return res.status(403).json({ error: 'Access denied to this terminal' });
+    }
+
+    // Check if run number already exists for the terminal
+    const existingRoute = await prisma.route.findFirst({
+      where: { 
+        runNumber: data.runNumber,
+        terminalId: data.terminalId,
+      },
     });
 
     if (existingRoute) {

@@ -3,6 +3,7 @@ import multer from 'multer';
 import prisma from '../utils/database.js';
 import { authenticateToken, requireAdmin } from '../middleware/auth.js';
 import { FileProcessor } from '../utils/fileProcessor.js';
+import { checkTerminalAccess, validateTerminalAccess } from '../middleware/terminalAccess.js';
 
 const router = Router();
 
@@ -25,10 +26,19 @@ const upload = multer({
 });
 
 // POST /api/import/routes/preview - Preview route import
-router.post('/routes/preview', authenticateToken, requireAdmin, upload.single('file'), async (req: Request, res: Response) => {
+router.post('/routes/preview', authenticateToken, requireAdmin, checkTerminalAccess, upload.single('file'), async (req: Request, res: Response) => {
   try {
     if (!req.file) {
       return res.status(400).json({ error: 'No file uploaded' });
+    }
+
+    // Get terminal ID from query or user's terminal
+    const terminalId = req.query.terminalId as string || req.user?.terminalId;
+    
+    if (!terminalId) {
+      return res.status(400).json({
+        error: 'Terminal ID is required for importing routes'
+      });
     }
 
     const result = await FileProcessor.processRouteFile(req.file.buffer, req.file.originalname);
@@ -37,6 +47,7 @@ router.post('/routes/preview', authenticateToken, requireAdmin, upload.single('f
       preview: true,
       result,
       filename: req.file.originalname,
+      terminalId,
     });
   } catch (error) {
     console.error('Route import preview error:', error);
@@ -45,13 +56,23 @@ router.post('/routes/preview', authenticateToken, requireAdmin, upload.single('f
 });
 
 // POST /api/import/routes/execute - Execute route import
-router.post('/routes/execute', authenticateToken, requireAdmin, upload.single('file'), async (req: Request, res: Response) => {
+router.post('/routes/execute', authenticateToken, requireAdmin, checkTerminalAccess, upload.single('file'), async (req: Request, res: Response) => {
   try {
     if (!req.file) {
       return res.status(400).json({ error: 'No file uploaded' });
     }
 
     const { overwrite = false } = req.body;
+    
+    // Get terminal ID from query or user's terminal
+    const terminalId = req.query.terminalId as string || req.user?.terminalId;
+    
+    if (!terminalId) {
+      return res.status(400).json({
+        error: 'Terminal ID is required for importing routes'
+      });
+    }
+    
     const result = await FileProcessor.processRouteFile(req.file.buffer, req.file.originalname);
 
     if (!result.success) {
@@ -71,15 +92,31 @@ router.post('/routes/execute', authenticateToken, requireAdmin, upload.single('f
 
     for (const routeData of result.data) {
       try {
+        // Add terminalId to route data
+        const routeWithTerminal = {
+          ...routeData,
+          terminalId
+        };
+
         const existingRoute = await prisma.route.findUnique({
-          where: { runNumber: routeData.runNumber },
+          where: { 
+            runNumber_terminalId: {
+              runNumber: routeData.runNumber,
+              terminalId: terminalId
+            }
+          },
         });
 
         if (existingRoute) {
           if (overwrite) {
             await prisma.route.update({
-              where: { runNumber: routeData.runNumber },
-              data: routeData,
+              where: { 
+                runNumber_terminalId: {
+                  runNumber: routeData.runNumber,
+                  terminalId: terminalId
+                }
+              },
+              data: routeWithTerminal,
             });
             importResults.updated++;
           } else {
@@ -87,7 +124,7 @@ router.post('/routes/execute', authenticateToken, requireAdmin, upload.single('f
           }
         } else {
           await prisma.route.create({
-            data: routeData,
+            data: routeWithTerminal,
           });
           importResults.created++;
         }
@@ -165,6 +202,23 @@ router.post('/employees/execute', authenticateToken, requireAdmin, upload.single
 
     for (const employeeData of result.data) {
       try {
+        // Look up terminal by code
+        const terminal = await prisma.terminal.findUnique({
+          where: { code: employeeData.terminal },
+        });
+
+        if (!terminal) {
+          importResults.errors.push(`Employee ${employeeData.employeeId}: Terminal '${employeeData.terminal}' not found`);
+          continue;
+        }
+
+        // Replace terminal code with terminalId
+        const { terminal: terminalCode, ...employeeWithoutTerminal } = employeeData;
+        const processedEmployeeData = {
+          ...employeeWithoutTerminal,
+          terminalId: terminal.id,
+        };
+
         const existingEmployee = await prisma.employee.findUnique({
           where: { employeeId: employeeData.employeeId },
         });
@@ -173,7 +227,7 @@ router.post('/employees/execute', authenticateToken, requireAdmin, upload.single
           if (overwrite) {
             await prisma.employee.update({
               where: { employeeId: employeeData.employeeId },
-              data: employeeData,
+              data: processedEmployeeData,
             });
             importResults.updated++;
           } else {
@@ -197,6 +251,7 @@ router.post('/employees/execute', authenticateToken, requireAdmin, upload.single
                     email: employeeData.email,
                     password: defaultPassword,
                     role: 'DRIVER',
+                    terminalId: terminal.id,
                   },
                 });
                 
@@ -210,7 +265,7 @@ router.post('/employees/execute', authenticateToken, requireAdmin, upload.single
 
           // Create employee
           await prisma.employee.create({
-            data: employeeData,
+            data: processedEmployeeData,
           });
           importResults.created++;
         }
