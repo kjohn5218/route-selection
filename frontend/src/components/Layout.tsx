@@ -16,7 +16,9 @@ import {
   ChevronDown,
   Truck,
   UserCircle,
-  Building2
+  Building2,
+  ClipboardList,
+  FileText
 } from 'lucide-react';
 import { useState } from 'react';
 
@@ -40,6 +42,8 @@ const Layout = () => {
     { path: '/routes', label: 'Routes', icon: Route, roles: ['Admin', 'Manager'] },
     { path: '/periods', label: 'Selection Periods', icon: Calendar, roles: ['Admin', 'Manager'] },
     { path: '/selections', label: 'My Selections', icon: CheckSquare, adminLabel: 'Selection Results' },
+    { path: '/manual-selections', label: 'Manual Entry', icon: ClipboardList, roles: ['Admin', 'Manager'] },
+    { path: '/print-forms', label: 'Print Forms', icon: FileText, roles: ['Admin', 'Manager'] },
     { path: '/import-export', label: 'Import/Export', icon: FileUp, roles: ['Admin'] },
     { path: '/users', label: 'User Management', icon: UserCircle, roles: ['Admin', 'Manager'] },
     { path: '/terminals', label: 'Terminal Management', icon: Building2, roles: ['Admin'] },

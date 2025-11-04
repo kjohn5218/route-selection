@@ -16,6 +16,8 @@ import ForgotPassword from './pages/ForgotPassword';
 import ResetPassword from './pages/ResetPassword';
 import Users from './pages/Users';
 import Terminals from './pages/Terminals';
+import ManualSelections from './pages/ManualSelections';
+import PrintForms from './pages/PrintForms';
 
 const queryClient = new QueryClient({
   defaultOptions: {
@@ -54,6 +56,8 @@ function App() {
               <Route path="import-export" element={<ImportExport />} />
               <Route path="users" element={<Users />} />
               <Route path="terminals" element={<Terminals />} />
+              <Route path="manual-selections" element={<ManualSelections />} />
+              <Route path="print-forms" element={<PrintForms />} />
             </Route>
           </Routes>
           </TerminalProvider>

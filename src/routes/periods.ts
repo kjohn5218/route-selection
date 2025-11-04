@@ -813,4 +813,36 @@ router.post('/:id/notify', authenticateToken, requireAdmin, async (req: Request,
   }
 });
 
+// GET /api/periods/:id/routes - Get all routes for a selection period
+router.get('/:id/routes', authenticateToken, async (req: Request, res: Response) => {
+  try {
+    const { id } = req.params;
+
+    // Get the selection period
+    const period = await prisma.selectionPeriod.findUnique({
+      where: { id },
+    });
+
+    if (!period) {
+      return res.status(404).json({ error: 'Selection period not found' });
+    }
+
+    // Get all routes associated with this period
+    const periodRoutes = await prisma.periodRoute.findMany({
+      where: { selectionPeriodId: id },
+      include: {
+        route: true,
+      },
+    });
+
+    // Return just the route objects
+    const routes = periodRoutes.map(pr => pr.route);
+
+    res.json(routes);
+  } catch (error) {
+    console.error('Get period routes error:', error);
+    res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
 export default router;

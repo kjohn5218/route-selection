@@ -869,4 +869,129 @@ router.get('/download/:periodId', authenticateToken, requireAdmin, async (req: R
   }
 });
 
+// POST /api/selections/admin - Admin creates selection on behalf of employee
+router.post('/admin', authenticateToken, requireAdmin, async (req: Request, res: Response) => {
+  try {
+    const manualSelectionSchema = z.object({
+      employeeId: z.string(),
+      selectionPeriodId: z.string(),
+      firstChoiceId: z.string().optional().nullable(),
+      secondChoiceId: z.string().optional().nullable(),
+      thirdChoiceId: z.string().optional().nullable(),
+    });
+
+    const data = manualSelectionSchema.parse(req.body);
+
+    // Check if employee exists and is eligible
+    const employee = await prisma.employee.findUnique({
+      where: { id: data.employeeId },
+    });
+
+    if (!employee) {
+      return res.status(404).json({ error: 'Employee not found' });
+    }
+
+    if (!employee.isEligible) {
+      return res.status(403).json({ error: 'Employee not eligible for route selection' });
+    }
+
+    // Check if selection period exists and is open
+    const selectionPeriod = await prisma.selectionPeriod.findUnique({
+      where: { id: data.selectionPeriodId },
+    });
+
+    if (!selectionPeriod) {
+      return res.status(404).json({ error: 'Selection period not found' });
+    }
+
+    if (selectionPeriod.status !== 'Open') {
+      return res.status(400).json({ error: 'Selection period is not open' });
+    }
+
+    // Check if selection already exists
+    const existingSelection = await prisma.selection.findUnique({
+      where: {
+        employeeId_selectionPeriodId: {
+          employeeId: data.employeeId,
+          selectionPeriodId: data.selectionPeriodId,
+        },
+      },
+    });
+
+    let selection;
+    let action: string;
+
+    if (existingSelection) {
+      // Update existing selection
+      selection = await prisma.selection.update({
+        where: { id: existingSelection.id },
+        data: {
+          firstChoiceId: data.firstChoiceId || null,
+          secondChoiceId: data.secondChoiceId || null,
+          thirdChoiceId: data.thirdChoiceId || null,
+          submittedAt: new Date(),
+        },
+        include: {
+          employee: true,
+          firstChoice: true,
+          secondChoice: true,
+          thirdChoice: true,
+        },
+      });
+      action = 'UPDATE_MANUAL_SELECTION';
+    } else {
+      // Create new selection
+      const confirmationNumber = `SEL-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
+      
+      selection = await prisma.selection.create({
+        data: {
+          employeeId: data.employeeId,
+          selectionPeriodId: data.selectionPeriodId,
+          firstChoiceId: data.firstChoiceId || null,
+          secondChoiceId: data.secondChoiceId || null,
+          thirdChoiceId: data.thirdChoiceId || null,
+          submittedAt: new Date(),
+          confirmationNumber,
+        },
+        include: {
+          employee: true,
+          firstChoice: true,
+          secondChoice: true,
+          thirdChoice: true,
+        },
+      });
+      action = 'CREATE_MANUAL_SELECTION';
+    }
+
+    // Create audit log
+    await prisma.auditLog.create({
+      data: {
+        userId: req.user!.id,
+        action,
+        resource: 'Selection',
+        details: JSON.stringify({
+          selectionId: selection.id,
+          employeeId: data.employeeId,
+          employeeName: `${selection.employee.firstName} ${selection.employee.lastName}`,
+          selectionPeriodId: data.selectionPeriodId,
+          choices: {
+            first: selection.firstChoice?.runNumber || null,
+            second: selection.secondChoice?.runNumber || null,
+            third: selection.thirdChoice?.runNumber || null,
+          },
+          isManualEntry: true,
+        }),
+      },
+    });
+
+    res.status(existingSelection ? 200 : 201).json(selection);
+  } catch (error) {
+    console.error('Admin create selection error:', error);
+    if (error instanceof z.ZodError) {
+      return res.status(400).json({ error: 'Invalid input', details: error.errors });
+    }
+    res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
 export default router;
