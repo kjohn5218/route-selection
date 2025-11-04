@@ -75,7 +75,7 @@ export default function SelectionResults() {
 
   const handleExport = async () => {
     try {
-      const response = await fetch(`${API_BASE_URL}/selections/download/${periodId}`, {
+      const response = await fetch(`${API_BASE_URL}/assignments/download/${periodId}`, {
         headers: {
           'Authorization': `Bearer ${localStorage.getItem('token')}`
         }

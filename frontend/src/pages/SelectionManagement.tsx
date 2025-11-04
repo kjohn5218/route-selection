@@ -13,7 +13,8 @@ import {
   ChevronDown,
   ChevronUp,
   FileText,
-  Send
+  Send,
+  Download
 } from 'lucide-react';
 import apiClient from '../api/client';
 import { useAuth } from '../contexts/AuthContext';
@@ -130,8 +131,7 @@ const SelectionManagement = () => {
     },
     onSuccess: (data) => {
       alert(`Successfully sent assignment notifications to ${data.notificationsSent} employees.`);
-      setShowResultsModal(false);
-      navigate('/periods');
+      // Don't close modal or navigate away - let user decide what to do next
     },
     onError: (error: any) => {
       const message = error.response?.data?.error || 'Failed to send notifications';
@@ -249,6 +249,15 @@ const SelectionManagement = () => {
           >
             <Award className="w-4 h-4" />
             Process Assignments
+          </button>
+        )}
+        {period.status === 'COMPLETED' && (
+          <button
+            onClick={() => navigate(`/selection-results/${periodId}`)}
+            className="btn-primary flex items-center gap-2"
+          >
+            <FileText className="w-4 h-4" />
+            View Results
           </button>
         )}
       </div>
@@ -660,12 +669,19 @@ const SelectionManagement = () => {
 
               {/* Action Buttons */}
               <div className="flex gap-3 justify-end pt-4 border-t">
+                <button
+                  onClick={() => navigate(`/selection-results/${periodId}`)}
+                  className="btn-secondary flex items-center gap-2"
+                >
+                  <FileText className="w-4 h-4" />
+                  View Full Results
+                </button>
                 <button 
                   onClick={() => handleExportResults()}
                   className="btn-secondary flex items-center gap-2"
                 >
-                  <FileText className="w-4 h-4" />
-                  Export Results
+                  <Download className="w-4 h-4" />
+                  Quick Export
                 </button>
                 <button 
                   onClick={() => notifyEmployeesMutation.mutate()}

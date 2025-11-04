@@ -2,7 +2,7 @@ import { useState, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { useQuery } from '@tanstack/react-query';
 import apiClient from '../api/client';
-import { ArrowLeft, Download, Mail } from 'lucide-react';
+import { ArrowLeft, Download, Mail, FileText } from 'lucide-react';
 import { toast } from 'react-hot-toast';
 
 interface Employee {
@@ -41,6 +41,9 @@ const SelectionResults = () => {
   const { periodId } = useParams();
   const navigate = useNavigate();
   const [searchTerm, setSearchTerm] = useState('');
+  const [sendingEmails, setSendingEmails] = useState(false);
+  const [downloading, setDownloading] = useState(false);
+  const [downloadFormat, setDownloadFormat] = useState<'csv' | 'pdf' | null>(null);
 
   // Fetch period details
   const { data: period } = useQuery<SelectionPeriod>({
@@ -62,33 +65,54 @@ const SelectionResults = () => {
     enabled: !!periodId,
   });
 
-  const handleExport = async () => {
+  const handleExport = async (format: 'csv' | 'pdf') => {
+    setDownloading(true);
+    setDownloadFormat(format);
     try {
-      const response = await apiClient.get(`/selections/download/${periodId}`, {
+      const response = await apiClient.get(`/assignments/download/${periodId}`, {
+        params: { format },
         responseType: 'blob',
       });
       
       const url = window.URL.createObjectURL(new Blob([response.data]));
       const link = document.createElement('a');
       link.href = url;
-      link.setAttribute('download', `selection-results-${periodId}.csv`);
+      link.setAttribute('download', `assignment-results-${periodId}.${format}`);
       document.body.appendChild(link);
       link.click();
       link.remove();
       window.URL.revokeObjectURL(url);
       
-      toast.success('Results exported successfully');
-    } catch (error) {
-      toast.error('Failed to export results');
+      toast.success(`Results exported as ${format.toUpperCase()} successfully`);
+    } catch (error: any) {
+      console.error('Export error:', error);
+      const errorMessage = error.response?.data?.error || `Failed to export ${format.toUpperCase()}`;
+      toast.error(errorMessage);
+    } finally {
+      setDownloading(false);
+      setDownloadFormat(null);
     }
   };
 
   const handleSendEmails = async () => {
+    if (!confirm('Are you sure you want to send email notifications to all assigned drivers?')) {
+      return;
+    }
+    
+    setSendingEmails(true);
     try {
       const response = await apiClient.post(`/assignments/notify/${periodId}`);
-      toast.success(`Sent ${response.data.notificationsSent} notifications`);
-    } catch (error) {
-      toast.error('Failed to send notifications');
+      if (response.data.notificationsFailed > 0) {
+        toast.warning(`Sent ${response.data.notificationsSent} notifications successfully. ${response.data.notificationsFailed} failed.`);
+      } else {
+        toast.success(`Successfully sent ${response.data.notificationsSent} email notifications!`);
+      }
+    } catch (error: any) {
+      console.error('Send emails error:', error);
+      const errorMessage = error.response?.data?.error || 'Failed to send notifications';
+      toast.error(errorMessage);
+    } finally {
+      setSendingEmails(false);
     }
   };
 
@@ -131,18 +155,40 @@ const SelectionResults = () => {
             Back
           </button>
           <button
-            onClick={handleExport}
-            className="inline-flex items-center px-4 py-2 bg-gray-100 hover:bg-gray-200 text-gray-700 rounded-lg transition-colors"
+            onClick={() => handleExport('csv')}
+            disabled={downloading}
+            className="inline-flex items-center px-4 py-2 bg-gray-100 hover:bg-gray-200 text-gray-700 rounded-lg transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
           >
-            <Download className="w-4 h-4 mr-2" />
-            Export CSV
+            {downloading && downloadFormat === 'csv' ? (
+              <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-gray-700 mr-2" />
+            ) : (
+              <Download className="w-4 h-4 mr-2" />
+            )}
+            {downloading && downloadFormat === 'csv' ? 'Downloading...' : 'Export CSV'}
+          </button>
+          <button
+            onClick={() => handleExport('pdf')}
+            disabled={downloading}
+            className="inline-flex items-center px-4 py-2 bg-gray-100 hover:bg-gray-200 text-gray-700 rounded-lg transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+          >
+            {downloading && downloadFormat === 'pdf' ? (
+              <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-gray-700 mr-2" />
+            ) : (
+              <FileText className="w-4 h-4 mr-2" />
+            )}
+            {downloading && downloadFormat === 'pdf' ? 'Downloading...' : 'Export PDF'}
           </button>
           <button
             onClick={handleSendEmails}
-            className="inline-flex items-center px-4 py-2 bg-primary-600 hover:bg-primary-700 text-white rounded-lg transition-colors"
+            disabled={sendingEmails || assignments.length === 0}
+            className="inline-flex items-center px-4 py-2 bg-primary-600 hover:bg-primary-700 text-white rounded-lg transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
           >
-            <Mail className="w-4 h-4 mr-2" />
-            Send Notifications
+            {sendingEmails ? (
+              <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white mr-2" />
+            ) : (
+              <Mail className="w-4 h-4 mr-2" />
+            )}
+            {sendingEmails ? 'Sending...' : 'Send Notifications'}
           </button>
         </div>
       </div>

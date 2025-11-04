@@ -3,6 +3,8 @@ import prisma from '../utils/database.js';
 import { authenticateToken, requireAdmin } from '../middleware/auth.js';
 import { AssignmentEngine } from '../services/assignmentEngine.js';
 import emailService from '../services/email.js';
+import { FileProcessor } from '../utils/fileProcessor.js';
+import PDFDocument from 'pdfkit';
 
 const router = Router();
 
@@ -583,6 +585,138 @@ router.post('/notify/:periodId', authenticateToken, requireAdmin, async (req: Re
   } catch (error) {
     console.error('Send assignment notifications error:', error);
     res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
+// GET /api/assignments/download/:periodId - Download assignment results
+router.get('/download/:periodId', authenticateToken, requireAdmin, async (req: Request, res: Response) => {
+  try {
+    const { periodId } = req.params;
+    const { format = 'csv' } = req.query;
+
+    // Get selection period
+    const selectionPeriod = await prisma.selectionPeriod.findUnique({
+      where: { id: periodId },
+    });
+
+    if (!selectionPeriod) {
+      return res.status(404).json({ error: 'Selection period not found' });
+    }
+
+    // Get all assignments for the period
+    const assignments = await prisma.assignment.findMany({
+      where: { selectionPeriodId: periodId },
+      include: {
+        employee: {
+          include: {
+            user: true,
+          },
+        },
+        route: true,
+      },
+      orderBy: {
+        employee: {
+          hireDate: 'asc',
+        },
+      },
+    });
+
+    // Build the data array for CSV/PDF
+    const data = assignments.map((assignment, index) => ({
+      'Seniority': index + 1,
+      'Employee Number': assignment.employee.employeeId,
+      'Name': `${assignment.employee.firstName} ${assignment.employee.lastName}`,
+      'Email': assignment.employee.user?.email || '',
+      'Hire Date': assignment.employee.hireDate.toISOString().split('T')[0],
+      'Assigned Route': assignment.route ? assignment.route.runNumber : 'Float Pool',
+      'Route Details': assignment.route ? `${assignment.route.origin} to ${assignment.route.destination}` : 'Various',
+      'Schedule': assignment.route ? `${assignment.route.days} | ${assignment.route.startTime} - ${assignment.route.endTime}` : 'As Needed',
+      'Choice Received': assignment.choiceReceived ? `Choice #${assignment.choiceReceived}` : 'N/A',
+      'Status': assignment.route ? 'Assigned' : 'Float Pool',
+    }));
+
+    if (format === 'pdf') {
+      // Generate PDF
+      const doc = new PDFDocument({ margin: 50 });
+      const chunks: Buffer[] = [];
+
+      doc.on('data', (chunk) => chunks.push(chunk));
+      doc.on('end', () => {
+        const result = Buffer.concat(chunks);
+        res.setHeader('Content-Type', 'application/pdf');
+        res.setHeader('Content-Disposition', `attachment; filename="assignment-results-${periodId}.pdf"`);
+        res.send(result);
+      });
+
+      // Add title
+      doc.fontSize(20).text(`Assignment Results - ${selectionPeriod.name}`, { align: 'center' });
+      doc.moveDown();
+      doc.fontSize(12).text(`Generated: ${new Date().toLocaleDateString()}`, { align: 'center' });
+      doc.fontSize(10).text(`Total Assignments: ${assignments.length}`, { align: 'center' });
+      doc.moveDown(2);
+
+      // Add summary statistics
+      const assignedCount = assignments.filter(a => a.route).length;
+      const floatPoolCount = assignments.filter(a => !a.route).length;
+      const firstChoiceCount = assignments.filter(a => a.choiceReceived === 1).length;
+      const secondChoiceCount = assignments.filter(a => a.choiceReceived === 2).length;
+      const thirdChoiceCount = assignments.filter(a => a.choiceReceived === 3).length;
+
+      doc.fontSize(14).text('Summary Statistics', { underline: true });
+      doc.fontSize(10);
+      doc.text(`Total Drivers: ${assignments.length}`);
+      doc.text(`Assigned to Routes: ${assignedCount}`);
+      doc.text(`Float Pool: ${floatPoolCount}`);
+      doc.text(`First Choice Assignments: ${firstChoiceCount}`);
+      doc.text(`Second Choice Assignments: ${secondChoiceCount}`);
+      doc.text(`Third Choice Assignments: ${thirdChoiceCount}`);
+      doc.text(`First Choice Success Rate: ${assignedCount > 0 ? Math.round((firstChoiceCount / assignedCount) * 100) : 0}%`);
+      doc.moveDown(2);
+
+      // Add assignments table header
+      doc.fontSize(14).text('Assignment Details', { underline: true });
+      doc.moveDown();
+
+      // Add each assignment
+      assignments.forEach((assignment, index) => {
+        // Add page break every 10 assignments to avoid overflow
+        if (index > 0 && index % 10 === 0) {
+          doc.addPage();
+        }
+
+        doc.fontSize(11).fillColor('black').text(`${index + 1}. ${assignment.employee.firstName} ${assignment.employee.lastName}`, { underline: true });
+        doc.fontSize(9).fillColor('#444444');
+        doc.text(`   Employee #: ${assignment.employee.employeeId}`);
+        doc.text(`   Seniority: #${index + 1} (Hired: ${assignment.employee.hireDate.toLocaleDateString()})`);
+        
+        if (assignment.route) {
+          doc.fillColor('green').text(`   Assigned Route: #${assignment.route.runNumber}`);
+          doc.fillColor('#444444');
+          doc.text(`   Route Details: ${assignment.route.origin} to ${assignment.route.destination}`);
+          doc.text(`   Schedule: ${assignment.route.days} | ${assignment.route.startTime} - ${assignment.route.endTime}`);
+          if (assignment.choiceReceived) {
+            doc.text(`   Choice Received: ${assignment.choiceReceived === 1 ? '1st' : assignment.choiceReceived === 2 ? '2nd' : '3rd'} Choice`);
+          }
+        } else {
+          doc.fillColor('orange').text(`   Assignment: Float Pool`);
+          doc.fillColor('#444444');
+          doc.text(`   Status: Will be assigned as needed`);
+        }
+        
+        doc.moveDown();
+      });
+
+      doc.end();
+    } else {
+      // Generate CSV
+      const csv = await FileProcessor.generateCSV(data);
+      res.setHeader('Content-Type', 'text/csv');
+      res.setHeader('Content-Disposition', `attachment; filename="assignment-results-${periodId}.csv"`);
+      res.send(csv);
+    }
+  } catch (error) {
+    console.error('Download assignment results error:', error);
+    res.status(500).json({ error: 'Failed to generate download' });
   }
 });
 

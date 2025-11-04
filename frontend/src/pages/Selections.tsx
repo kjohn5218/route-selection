@@ -1,27 +1,10 @@
 import { useState, useEffect } from 'react';
-import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { AlertCircle, CheckCircle, Route, Calendar, Clock, MapPin, Truck, AlertTriangle, Search, Download, Mail, FileSpreadsheet, Filter, Users } from 'lucide-react';
+import { useQuery } from '@tanstack/react-query';
+import { Link } from 'react-router-dom';
+import { Calendar, Users, CheckCircle, Clock, ChevronRight } from 'lucide-react';
 import apiClient from '../api/client';
 import { useAuth } from '../contexts/AuthContext';
 import { useTerminal } from '../contexts/TerminalContext';
-import { Link } from 'react-router-dom';
-
-interface Route {
-  id: string;
-  runNumber: string;
-  type: string;
-  origin: string;
-  destination: string;
-  days: string;
-  startTime: string;
-  endTime: string;
-  distance: number;
-  rateType: string;
-  workTime: number;
-  requiresDoublesEndorsement: boolean;
-  requiresChainExperience: boolean;
-  isActive: boolean;
-}
 
 interface SelectionPeriod {
   id: string;
@@ -32,791 +15,13 @@ interface SelectionPeriod {
   requiredSelections: number;
 }
 
-interface Selection {
-  id: string;
-  firstChoiceId: string | null;
-  secondChoiceId: string | null;
-  thirdChoiceId: string | null;
-  confirmationNumber: string;
-  submittedAt: string;
-  firstChoice: Route | null;
-  secondChoice: Route | null;
-  thirdChoice: Route | null;
-}
-
 const Selections = () => {
   const { user } = useAuth();
   const { selectedTerminal } = useTerminal();
-  const queryClient = useQueryClient();
-  const [selectedChoices, setSelectedChoices] = useState<{
-    firstChoiceId: string | null;
-    secondChoiceId: string | null;
-    thirdChoiceId: string | null;
-  }>({
-    firstChoiceId: null,
-    secondChoiceId: null,
-    thirdChoiceId: null,
-  });
   const [searchTerm, setSearchTerm] = useState('');
-  const [filterType, setFilterType] = useState<string>('ALL');
-  const [showListView, setShowListView] = useState(true);
-
-  // Get active selection period
-  const { data: activePeriod, isLoading: periodLoading, error: periodError } = useQuery<SelectionPeriod | null>({
-    queryKey: ['active-selection-period', selectedTerminal?.id],
-    queryFn: async () => {
-      if (!selectedTerminal) return null;
-      const response = await apiClient.get('/periods/active', {
-        params: { terminalId: selectedTerminal.id }
-      });
-      console.log('Active period response:', response.data);
-      return response.data;
-    },
-    enabled: !!selectedTerminal,
-  });
-
-  // Get available routes
-  const { data: availableRoutes = [], isLoading: routesLoading } = useQuery<Route[]>({
-    queryKey: ['available-routes', activePeriod?.id],
-    queryFn: async () => {
-      if (!activePeriod?.id) return [];
-      console.log('Fetching available routes for period:', activePeriod.id);
-      const response = await apiClient.get(`/routes/available/${activePeriod.id}`);
-      console.log('Available routes response:', response.data);
-      return response.data;
-    },
-    enabled: !!activePeriod?.id && activePeriod.status === 'OPEN',
-  });
-
-  // Debug logging
-  useEffect(() => {
-    console.log('=== Selection Page Debug ===');
-    console.log('User:', user);
-    console.log('Active period:', activePeriod);
-    console.log('Period loading:', periodLoading);
-    console.log('Period error:', periodError);
-    console.log('Available routes query enabled:', !!activePeriod?.id && activePeriod?.status === 'OPEN');
-    console.log('Available routes:', availableRoutes);
-    console.log('Routes loading:', routesLoading);
-    if (activePeriod) {
-      console.log('Period details:', {
-        id: activePeriod.id,
-        status: activePeriod.status,
-        name: activePeriod.name,
-        startDate: activePeriod.startDate,
-        endDate: activePeriod.endDate
-      });
-    }
-  }, [activePeriod, availableRoutes, periodLoading, periodError, routesLoading, user]);
-
-  // Get current selection
-  const { data: currentSelection } = useQuery<Selection | null>({
-    queryKey: ['my-selection', activePeriod?.id],
-    queryFn: async () => {
-      if (!activePeriod?.id) return null;
-      const response = await apiClient.get(`/selections/my/${activePeriod.id}`);
-      return response.data;
-    },
-    enabled: !!activePeriod?.id,
-  });
-
-  // Submit selection mutation
-  const submitSelection = useMutation({
-    mutationFn: async (data: {
-      selectionPeriodId: string;
-      firstChoiceId?: string;
-      secondChoiceId?: string;
-      thirdChoiceId?: string;
-    }) => {
-      const response = await apiClient.post('/selections', data);
-      return response.data;
-    },
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['my-selection'] });
-      setSelectedChoices({
-        firstChoiceId: null,
-        secondChoiceId: null,
-        thirdChoiceId: null,
-      });
-    },
-  });
-
-  const handleChoiceSelect = (choiceNumber: 1 | 2 | 3, routeId: string | null) => {
-    const key = `${['first', 'second', 'third'][choiceNumber - 1]}ChoiceId` as keyof typeof selectedChoices;
-    setSelectedChoices(prev => ({
-      ...prev,
-      [key]: routeId,
-    }));
-  };
-
-  const handleSubmit = () => {
-    if (!activePeriod?.id) return;
-
-    const choices = Object.entries(selectedChoices)
-      .filter(([_, value]) => value !== null)
-      .reduce((acc, [key, value]) => ({ ...acc, [key]: value }), {});
-
-    submitSelection.mutate({
-      selectionPeriodId: activePeriod.id,
-      ...choices,
-    });
-  };
-
-  const getRouteTypeColor = (type: string) => {
-    switch (type) {
-      case 'LOCAL':
-        return 'bg-blue-100 text-blue-800';
-      case 'REGIONAL':
-        return 'bg-green-100 text-green-800';
-      case 'LONG_HAUL':
-        return 'bg-purple-100 text-purple-800';
-      case 'DEDICATED':
-        return 'bg-orange-100 text-orange-800';
-      case 'DOUBLES':
-        return 'bg-red-100 text-red-800';
-      default:
-        return 'bg-gray-100 text-gray-800';
-    }
-  };
-
-  const getRateTypeIcon = (rateType: string) => {
-    switch (rateType) {
-      case 'HOURLY':
-        return Clock;
-      case 'MILEAGE':
-        return Truck;
-      default:
-        return MapPin;
-    }
-  };
-
-  // Update selection mutation
-  const updateSelection = useMutation({
-    mutationFn: async (data: {
-      id: string;
-      firstChoiceId?: string | null;
-      secondChoiceId?: string | null;
-      thirdChoiceId?: string | null;
-    }) => {
-      const { id, ...choices } = data;
-      const response = await apiClient.put(`/selections/${id}`, choices);
-      return response.data;
-    },
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['my-selection'] });
-      setIsEditMode(false);
-      setSelectedChoices({
-        firstChoiceId: null,
-        secondChoiceId: null,
-        thirdChoiceId: null,
-      });
-    },
-  });
-
-  const deleteSelection = useMutation({
-    mutationFn: async (id: string) => {
-      const response = await apiClient.delete(`/selections/${id}`);
-      return response.data;
-    },
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['my-selection'] });
-    },
-  });
-
-  const [isEditMode, setIsEditMode] = useState(false);
-
-  // Admin view - show all selections
-  if (user?.role === 'Admin') {
-    return <AdminSelectionResults />;
-  }
-
-  // Loading state
-  if (periodLoading) {
-    return (
-      <div className="max-w-4xl mx-auto">
-        <h1 className="text-2xl font-bold text-gray-900 mb-6">Route Selection</h1>
-        <div className="animate-pulse">
-          <div className="h-32 bg-gray-200 rounded-lg"></div>
-        </div>
-      </div>
-    );
-  }
-
-  // Error state
-  if (periodError) {
-    return (
-      <div className="max-w-4xl mx-auto">
-        <h1 className="text-2xl font-bold text-gray-900 mb-6">Route Selection</h1>
-        <div className="bg-red-50 border border-red-200 rounded-lg p-6">
-          <div className="flex items-center gap-3">
-            <AlertCircle className="w-6 h-6 text-red-600" />
-            <div>
-              <h3 className="font-semibold text-red-900">Error Loading Selection Period</h3>
-              <p className="text-red-700 mt-1">
-                Failed to load selection period data. Please try refreshing the page.
-              </p>
-            </div>
-          </div>
-        </div>
-      </div>
-    );
-  }
-
-  // No active period (check both null and status)
-  if (!activePeriod) {
-    console.log('No active period found (null)');
-    return (
-      <div className="max-w-4xl mx-auto">
-        <h1 className="text-2xl font-bold text-gray-900 mb-6">Route Selection</h1>
-        <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-6">
-          <div className="flex items-center gap-3">
-            <AlertCircle className="w-6 h-6 text-yellow-600" />
-            <div>
-              <h3 className="font-semibold text-yellow-900">No Active Selection Period</h3>
-              <p className="text-yellow-700 mt-1">
-                There is no selection period currently open. Please check back later or contact your administrator.
-              </p>
-            </div>
-          </div>
-        </div>
-      </div>
-    );
-  }
-
-  // Check if period is not open
-  if (activePeriod.status !== 'OPEN') {
-    console.log('Active period found but not OPEN:', activePeriod.status);
-    return (
-      <div className="max-w-4xl mx-auto">
-        <h1 className="text-2xl font-bold text-gray-900 mb-6">Route Selection</h1>
-        <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-6">
-          <div className="flex items-center gap-3">
-            <AlertCircle className="w-6 h-6 text-yellow-600" />
-            <div>
-              <h3 className="font-semibold text-yellow-900">No Active Selection Period</h3>
-              <p className="text-yellow-700 mt-1">
-                There is no selection period currently open. Please check back later or contact your administrator.
-              </p>
-            </div>
-          </div>
-        </div>
-      </div>
-    );
-  }
-
-  // Initialize edit mode selections
-  const handleEditClick = () => {
-    if (currentSelection) {
-      setSelectedChoices({
-        firstChoiceId: currentSelection.firstChoiceId,
-        secondChoiceId: currentSelection.secondChoiceId,
-        thirdChoiceId: currentSelection.thirdChoiceId,
-      });
-      setIsEditMode(true);
-    }
-  };
-
-  const handleUpdate = () => {
-    if (!currentSelection) return;
-
-    const choices = Object.entries(selectedChoices)
-      .filter(([_, value]) => value !== null)
-      .reduce((acc, [key, value]) => ({ ...acc, [key]: value }), {});
-
-    updateSelection.mutate({
-      id: currentSelection.id,
-      ...choices,
-    });
-  };
-
-  // Already submitted - show view/edit mode
-  if (currentSelection && !isEditMode) {
-    const isOpen = activePeriod?.status === 'OPEN';
-    
-    return (
-      <div className="max-w-4xl mx-auto">
-        <h1 className="text-2xl font-bold text-gray-900 mb-6">Route Selection</h1>
-        <div className="bg-green-50 border border-green-200 rounded-lg p-6 mb-6">
-          <div className="flex items-center justify-between">
-            <div className="flex items-center gap-3">
-              <CheckCircle className="w-6 h-6 text-green-600" />
-              <div>
-                <h3 className="font-semibold text-green-900">Selection Submitted</h3>
-                <p className="text-green-700 mt-1">
-                  Your route selection has been submitted successfully.
-                </p>
-                <p className="text-sm text-green-600 mt-2">
-                  Confirmation #: {currentSelection.confirmationNumber}
-                </p>
-              </div>
-            </div>
-            {isOpen && (
-              <div className="flex gap-2">
-                <button
-                  onClick={handleEditClick}
-                  className="btn-secondary"
-                >
-                  Edit Selection
-                </button>
-                <button
-                  onClick={() => {
-                    if (confirm('Are you sure you want to cancel your selection? This cannot be undone.')) {
-                      deleteSelection.mutate(currentSelection.id);
-                    }
-                  }}
-                  disabled={deleteSelection.isPending}
-                  className="btn-danger"
-                >
-                  Cancel Selection
-                </button>
-              </div>
-            )}
-          </div>
-        </div>
-
-        <div className="space-y-4">
-          <h2 className="text-lg font-semibold text-gray-900">Your Selections</h2>
-          {[
-            { label: 'First Choice', route: currentSelection.firstChoice },
-            { label: 'Second Choice', route: currentSelection.secondChoice },
-            { label: 'Third Choice', route: currentSelection.thirdChoice },
-          ].slice(0, activePeriod?.requiredSelections || 3).map((choice, index) => (
-            <div key={index} className="card">
-              <div className="p-4">
-                <h3 className="font-medium text-gray-900 mb-2">{choice.label}</h3>
-                {choice.route ? (
-                  <div className="space-y-2">
-                    <div className="flex items-center justify-between">
-                      <span className="font-medium">#{choice.route.runNumber}</span>
-                      <span className={`px-2 py-1 rounded-full text-xs font-medium ${getRouteTypeColor(choice.route.type)}`}>
-                        {choice.route.type.replace('_', ' ')}
-                      </span>
-                    </div>
-                    <p className="text-sm text-gray-600">
-                      {choice.route.origin} → {choice.route.destination}
-                    </p>
-                    <p className="text-sm text-gray-500">
-                      {choice.route.days} | {choice.route.startTime} - {choice.route.endTime}
-                    </p>
-                  </div>
-                ) : (
-                  <p className="text-gray-500 italic">No selection made</p>
-                )}
-              </div>
-            </div>
-          ))}
-        </div>
-        
-        {!isOpen && (
-          <div className="mt-6 bg-yellow-50 border border-yellow-200 rounded-lg p-4">
-            <div className="flex items-center gap-3">
-              <AlertCircle className="w-5 h-5 text-yellow-600" />
-              <p className="text-yellow-700 text-sm">
-                The selection period has closed. You can no longer modify your selections.
-              </p>
-            </div>
-          </div>
-        )}
-      </div>
-    );
-  }
-
-  // Selection form
-  const selectedRouteIds = Object.values(selectedChoices).filter(Boolean);
-  const getAvailableRoutesForChoice = (choiceNumber: 1 | 2 | 3) => {
-    return availableRoutes.filter(route => {
-      // Don't show routes already selected for other choices
-      const otherChoices = Object.entries(selectedChoices)
-        .filter(([key]) => key !== `${['first', 'second', 'third'][choiceNumber - 1]}ChoiceId`)
-        .map(([_, value]) => value)
-        .filter(Boolean);
-      return !otherChoices.includes(route.id);
-    });
-  };
-
-  // Filter routes based on search and type
-  const filteredRoutes = availableRoutes.filter(route => {
-    const matchesSearch = searchTerm === '' || 
-      route.runNumber.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      route.origin.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      route.destination.toLowerCase().includes(searchTerm.toLowerCase());
-    
-    const matchesType = filterType === 'ALL' || route.type === filterType;
-    
-    return matchesSearch && matchesType;
-  });
-
-  return (
-    <div className="max-w-6xl mx-auto">
-      <div className="mb-8">
-        <h1 className="text-2xl font-bold text-gray-900 mb-2">Route Selection</h1>
-        <div className="flex items-center gap-4 text-sm text-gray-600">
-          <div className="flex items-center gap-2">
-            <Calendar className="w-4 h-4" />
-            <span>{activePeriod.name}</span>
-          </div>
-          <div className="flex items-center gap-2">
-            <Clock className="w-4 h-4" />
-            <span>
-              Open until {new Date(activePeriod.endDate).toLocaleDateString()}
-            </span>
-          </div>
-        </div>
-      </div>
-
-      {(submitSelection.error || updateSelection.error) && (
-        <div className="mb-6 bg-red-50 border border-red-200 rounded-lg p-4">
-          <div className="flex items-center gap-3">
-            <AlertCircle className="w-5 h-5 text-red-600" />
-            <p className="text-red-700">
-              {(submitSelection.error as any)?.response?.data?.error || 
-               (updateSelection.error as any)?.response?.data?.error || 
-               'Failed to submit selection'}
-            </p>
-          </div>
-        </div>
-      )}
-
-      {isEditMode && (
-        <div className="mb-4 bg-blue-50 border border-blue-200 rounded-lg p-4">
-          <div className="flex items-center justify-between">
-            <div className="flex items-center gap-3">
-              <AlertCircle className="w-5 h-5 text-blue-600" />
-              <p className="text-blue-700 font-medium">
-                Edit Mode - Update your route selections below
-              </p>
-            </div>
-            <button
-              onClick={() => {
-                setIsEditMode(false);
-                setSelectedChoices({
-                  firstChoiceId: null,
-                  secondChoiceId: null,
-                  thirdChoiceId: null,
-                });
-              }}
-              className="text-blue-600 hover:text-blue-700 text-sm font-medium"
-            >
-              Cancel Edit
-            </button>
-          </div>
-        </div>
-      )}
-
-      {/* View Toggle and Filters */}
-      <div className="mb-6 flex flex-col lg:flex-row gap-4">
-        <div className="flex-1 flex flex-col sm:flex-row gap-4">
-          <div className="flex-1 relative">
-            <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
-            <input
-              type="text"
-              placeholder="Search routes by number, origin, or destination..."
-              value={searchTerm}
-              onChange={(e) => setSearchTerm(e.target.value)}
-              className="form-input pl-10"
-            />
-          </div>
-        </div>
-        <div className="flex gap-2">
-          <button
-            onClick={() => setShowListView(!showListView)}
-            className="btn-secondary"
-          >
-            {showListView ? 'Selection View' : 'List View'}
-          </button>
-        </div>
-      </div>
-
-      {/* Available Routes Summary */}
-      <div className="mb-6 bg-primary-50 border border-primary-200 rounded-lg p-4">
-        <div className="flex items-center justify-between">
-          <div className="flex items-center gap-3">
-            <Route className="w-5 h-5 text-primary-600" />
-            <div>
-              <p className="font-semibold text-primary-900">
-                {filteredRoutes.length} Available Routes
-              </p>
-              <p className="text-sm text-primary-700">
-                {selectedRouteIds.length > 0 
-                  ? `${selectedRouteIds.length} route${selectedRouteIds.length > 1 ? 's' : ''} selected`
-                  : `Select ${activePeriod?.requiredSelections === 1 ? '1 route' : `up to ${activePeriod?.requiredSelections || 3} routes`} in order of preference`}
-              </p>
-            </div>
-          </div>
-          {selectedRouteIds.length > 0 && selectedRouteIds.length < (activePeriod?.requiredSelections || 3) && (
-            <span className="text-sm text-primary-600 font-medium">
-              {(activePeriod?.requiredSelections || 3) - selectedRouteIds.length} selection{(activePeriod?.requiredSelections || 3) - selectedRouteIds.length !== 1 ? 's' : ''} remaining
-            </span>
-          )}
-        </div>
-      </div>
-
-      {/* List View */}
-      {showListView ? (
-        <div className="mb-8">
-          <div className="card">
-            <div className="overflow-x-auto">
-              <table className="min-w-full divide-y divide-gray-200">
-                <thead className="bg-gray-50">
-                  <tr>
-                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                      Route
-                    </th>
-                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                      Type
-                    </th>
-                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                      Origin/Destination
-                    </th>
-                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                      Schedule
-                    </th>
-                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                      Details
-                    </th>
-                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                      Selection
-                    </th>
-                  </tr>
-                </thead>
-                <tbody className="bg-white divide-y divide-gray-200">
-                  {filteredRoutes.length === 0 ? (
-                    <tr>
-                      <td colSpan={6} className="px-6 py-12 text-center text-gray-500">
-                        No routes found matching your criteria
-                      </td>
-                    </tr>
-                  ) : (
-                    filteredRoutes.map((route) => {
-                      const isSelected = selectedRouteIds.includes(route.id);
-                      const choiceNumber = selectedChoices.firstChoiceId === route.id ? 1 
-                        : selectedChoices.secondChoiceId === route.id ? 2 
-                        : selectedChoices.thirdChoiceId === route.id ? 3 
-                        : null;
-                      
-                      return (
-                        <tr key={route.id} className={isSelected ? 'bg-primary-50' : 'hover:bg-gray-50'}>
-                          <td className="px-6 py-4 whitespace-nowrap">
-                            <div className="text-sm font-medium text-gray-900">#{route.runNumber}</div>
-                          </td>
-                          <td className="px-6 py-4 whitespace-nowrap">
-                            <span className={`px-2 py-1 rounded-full text-xs font-medium ${getRouteTypeColor(route.type)}`}>
-                              {route.type.replace('_', ' ')}
-                            </span>
-                          </td>
-                          <td className="px-6 py-4">
-                            <div className="text-sm text-gray-900">{route.origin}</div>
-                            <div className="text-sm text-gray-500">→ {route.destination}</div>
-                          </td>
-                          <td className="px-6 py-4">
-                            <div className="text-sm text-gray-900">{route.days}</div>
-                            <div className="text-sm text-gray-500">{route.startTime} - {route.endTime}</div>
-                          </td>
-                          <td className="px-6 py-4">
-                            <div className="text-sm text-gray-900">
-                              {route.distance} mi • {route.workTime}h • {route.rateType}
-                            </div>
-                            {(route.requiresDoublesEndorsement || route.requiresChainExperience) && (
-                              <div className="flex gap-2 mt-1">
-                                {route.requiresDoublesEndorsement && (
-                                  <span className="text-xs text-amber-600 font-medium">Doubles</span>
-                                )}
-                                {route.requiresChainExperience && (
-                                  <span className="text-xs text-amber-600 font-medium">Chains</span>
-                                )}
-                              </div>
-                            )}
-                          </td>
-                          <td className="px-6 py-4 whitespace-nowrap">
-                            {isSelected ? (
-                              <span className="inline-flex items-center px-3 py-1 rounded-full text-xs font-medium bg-primary-600 text-white">
-                                Choice #{choiceNumber}
-                              </span>
-                            ) : (
-                              <select
-                                className="form-select text-sm"
-                                value=""
-                                onChange={(e) => handleChoiceSelect(parseInt(e.target.value) as 1 | 2 | 3, route.id)}
-                                disabled={selectedRouteIds.length >= (activePeriod?.requiredSelections || 3)}
-                              >
-                                <option value="">Select as...</option>
-                                {!selectedChoices.firstChoiceId && <option value="1">1st Choice</option>}
-                                {!selectedChoices.secondChoiceId && activePeriod?.requiredSelections && activePeriod.requiredSelections >= 2 && <option value="2">2nd Choice</option>}
-                                {!selectedChoices.thirdChoiceId && activePeriod?.requiredSelections && activePeriod.requiredSelections >= 3 && <option value="3">3rd Choice</option>}
-                              </select>
-                            )}
-                          </td>
-                        </tr>
-                      );
-                    })
-                  )}
-                </tbody>
-              </table>
-            </div>
-          </div>
-
-          {/* Selected Routes Summary */}
-          {selectedRouteIds.length > 0 && (
-            <div className={`mt-6 grid grid-cols-1 ${activePeriod?.requiredSelections === 1 ? '' : activePeriod?.requiredSelections === 2 ? 'md:grid-cols-2' : 'md:grid-cols-3'} gap-4`}>
-              {Array.from({ length: activePeriod?.requiredSelections || 3 }, (_, i) => i + 1).map((num) => {
-                const key = `${['first', 'second', 'third'][num - 1]}ChoiceId` as keyof typeof selectedChoices;
-                const routeId = selectedChoices[key];
-                const route = routeId ? availableRoutes.find(r => r.id === routeId) : null;
-                
-                return (
-                  <div key={num} className="card p-4">
-                    <h4 className="font-medium text-gray-900 mb-2">
-                      {['First', 'Second', 'Third'][num - 1]} Choice
-                    </h4>
-                    {route ? (
-                      <div className="space-y-1">
-                        <p className="text-sm font-medium">#{route.runNumber}</p>
-                        <p className="text-sm text-gray-600">{route.origin} → {route.destination}</p>
-                        <button
-                          onClick={() => handleChoiceSelect(num as 1 | 2 | 3, null)}
-                          className="text-xs text-red-600 hover:text-red-700 font-medium mt-2"
-                        >
-                          Remove Selection
-                        </button>
-                      </div>
-                    ) : (
-                      <p className="text-sm text-gray-500 italic">Not selected</p>
-                    )}
-                  </div>
-                );
-              })}
-            </div>
-          )}
-        </div>
-      ) : (
-        /* Selection View (Original Grid) */
-        <div className={`grid grid-cols-1 ${activePeriod?.requiredSelections === 1 ? '' : activePeriod?.requiredSelections === 2 ? 'lg:grid-cols-2' : 'lg:grid-cols-3'} gap-6 mb-8`}>
-          {Array.from({ length: activePeriod?.requiredSelections || 3 }, (_, i) => i + 1).map((choiceNumber) => {
-            const key = `${['first', 'second', 'third'][choiceNumber - 1]}ChoiceId` as keyof typeof selectedChoices;
-            const selectedRouteId = selectedChoices[key];
-            const availableRoutesForChoice = getAvailableRoutesForChoice(choiceNumber as 1 | 2 | 3);
-
-            return (
-              <div key={choiceNumber} className="card">
-                <div className="p-6">
-                  <h3 className="font-semibold text-gray-900 mb-4">
-                    {['First', 'Second', 'Third'][choiceNumber - 1]} Choice
-                  </h3>
-                  
-                  <select
-                    className="form-select mb-4"
-                    value={selectedRouteId || ''}
-                    onChange={(e) => handleChoiceSelect(choiceNumber as 1 | 2 | 3, e.target.value || null)}
-                    disabled={routesLoading}
-                  >
-                    <option value="">Select a route...</option>
-                    {availableRoutesForChoice.map((route) => (
-                      <option key={route.id} value={route.id}>
-                        #{route.runNumber} - {route.origin} → {route.destination}
-                        {route.requiresDoublesEndorsement && ' (Doubles Required)'}
-                        {route.requiresChainExperience && ' (Chains Required)'}
-                      </option>
-                    ))}
-                  </select>
-
-                  {selectedRouteId && (
-                    <div className="border-t pt-4">
-                      {(() => {
-                        const route = availableRoutes.find(r => r.id === selectedRouteId);
-                        if (!route) return null;
-
-                        const RateIcon = getRateTypeIcon(route.rateType);
-
-                        return (
-                          <div className="space-y-3">
-                            <div className="flex items-center justify-between">
-                              <span className="font-medium">#{route.runNumber}</span>
-                              <span className={`px-2 py-1 rounded-full text-xs font-medium ${getRouteTypeColor(route.type)}`}>
-                                {route.type.replace('_', ' ')}
-                              </span>
-                            </div>
-                            
-                            <div className="space-y-2 text-sm">
-                              <div className="flex items-center gap-2 text-gray-600">
-                                <MapPin className="w-4 h-4" />
-                                <span>{route.origin} → {route.destination}</span>
-                              </div>
-                              
-                              <div className="flex items-center gap-2 text-gray-600">
-                                <Clock className="w-4 h-4" />
-                                <span>{route.days}</span>
-                              </div>
-                              
-                              <div className="flex items-center gap-2 text-gray-600">
-                                <Clock className="w-4 h-4" />
-                                <span>{route.startTime} - {route.endTime}</span>
-                              </div>
-                              
-                              <div className="flex items-center gap-2 text-gray-600">
-                                <RateIcon className="w-4 h-4" />
-                                <span>{route.rateType} ({route.workTime}h)</span>
-                              </div>
-                              
-                              <div className="flex items-center gap-2 text-gray-600">
-                                <Truck className="w-4 h-4" />
-                                <span>{route.distance} miles</span>
-                              </div>
-                            </div>
-
-                            {(route.requiresDoublesEndorsement || route.requiresChainExperience) && (
-                              <div className="border-t pt-3 space-y-1">
-                                {route.requiresDoublesEndorsement && (
-                                  <div className="flex items-center gap-2 text-amber-600 text-sm">
-                                    <AlertTriangle className="w-4 h-4" />
-                                    <span>Doubles endorsement required</span>
-                                  </div>
-                                )}
-                                {route.requiresChainExperience && (
-                                  <div className="flex items-center gap-2 text-amber-600 text-sm">
-                                    <AlertTriangle className="w-4 h-4" />
-                                    <span>Chain experience required</span>
-                                  </div>
-                                )}
-                              </div>
-                            )}
-                          </div>
-                        );
-                      })()}
-                    </div>
-                  )}
-                </div>
-              </div>
-            );
-          })}
-        </div>
-      )}
-
-      <div className="flex justify-end">
-        <button
-          onClick={isEditMode ? handleUpdate : handleSubmit}
-          disabled={!selectedRouteIds.length || submitSelection.isPending || updateSelection.isPending}
-          className="btn-primary"
-        >
-          {submitSelection.isPending || updateSelection.isPending ? 'Saving...' : 
-           isEditMode ? 'Update Selection' : 'Submit Selection'}
-        </button>
-      </div>
-    </div>
-  );
-};
-
-// Admin Selection Results Component
-const AdminSelectionResults = () => {
-  const queryClient = useQueryClient();
-  const { selectedTerminal } = useTerminal();
-  const [selectedPeriodId, setSelectedPeriodId] = useState<string>('');
-  const [searchTerm, setSearchTerm] = useState('');
-  const [filterStatus, setFilterStatus] = useState<string>('ALL');
-  const [showEmailModal, setShowEmailModal] = useState(false);
-  const [selectedEmployees, setSelectedEmployees] = useState<string[]>([]);
 
   // Get all selection periods
-  const { data: selectionPeriods = [] } = useQuery<SelectionPeriod[]>({
+  const { data: periods = [], isLoading } = useQuery<SelectionPeriod[]>({
     queryKey: ['selection-periods', selectedTerminal?.id],
     queryFn: async () => {
       if (!selectedTerminal) return [];
@@ -828,407 +33,147 @@ const AdminSelectionResults = () => {
     enabled: !!selectedTerminal,
   });
 
-  // Get selections for selected period
-  const { data: periodSelections = [], isLoading: selectionsLoading } = useQuery({
-    queryKey: ['period-selections', selectedPeriodId],
-    queryFn: async () => {
-      if (!selectedPeriodId) return [];
-      const response = await apiClient.get(`/selections/period/${selectedPeriodId}`);
-      return response.data;
-    },
-    enabled: !!selectedPeriodId,
-  });
+  // Filter periods based on search
+  const filteredPeriods = periods.filter(period =>
+    period.name.toLowerCase().includes(searchTerm.toLowerCase())
+  );
 
-  // Send email notification mutation
-  const sendEmailNotifications = useMutation({
-    mutationFn: async (data: { periodId: string; employeeIds?: string[] }) => {
-      const response = await apiClient.post('/selections/send-notifications', data);
-      return response.data;
-    },
-    onSuccess: () => {
-      alert('Email notifications sent successfully');
-      setShowEmailModal(false);
-      setSelectedEmployees([]);
-    },
-    onError: (error: any) => {
-      alert(error.response?.data?.error || 'Failed to send notifications');
-    },
-  });
-
-  // Download selection results
-  const downloadResults = async (format: 'csv' | 'pdf') => {
-    try {
-      const response = await apiClient.get(`/selections/download/${selectedPeriodId}`, {
-        params: { format },
-        responseType: 'blob',
-      });
-
-      const blob = new Blob([response.data], { 
-        type: format === 'csv' ? 'text/csv' : 'application/pdf' 
-      });
-      
-      const url = window.URL.createObjectURL(blob);
-      const link = document.createElement('a');
-      link.href = url;
-      link.download = `selection-results-${selectedPeriodId}.${format}`;
-      document.body.appendChild(link);
-      link.click();
-      document.body.removeChild(link);
-      window.URL.revokeObjectURL(url);
-    } catch (error: any) {
-      alert(error.response?.data?.error || 'Failed to download results');
+  const getStatusColor = (status: string) => {
+    switch (status) {
+      case 'UPCOMING':
+        return 'bg-gray-100 text-gray-800';
+      case 'OPEN':
+        return 'bg-green-100 text-green-800';
+      case 'CLOSED':
+        return 'bg-yellow-100 text-yellow-800';
+      case 'PROCESSING':
+        return 'bg-blue-100 text-blue-800';
+      case 'COMPLETED':
+        return 'bg-purple-100 text-purple-800';
+      default:
+        return 'bg-gray-100 text-gray-800';
     }
   };
 
-  // Filter selections
-  const filteredSelections = periodSelections.filter((selection: any) => {
-    const matchesSearch = searchTerm === '' || 
-      selection.employee?.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      selection.employee?.email.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      selection.employee?.employeeNumber?.toLowerCase().includes(searchTerm.toLowerCase());
-    
-    const matchesStatus = filterStatus === 'ALL' || 
-      (filterStatus === 'SUBMITTED' && selection.submittedAt) ||
-      (filterStatus === 'NOT_SUBMITTED' && !selection.submittedAt) ||
-      (filterStatus === 'ASSIGNED' && selection.assignedRouteId);
-    
-    return matchesSearch && matchesStatus;
-  });
-
-  const selectedPeriod = selectionPeriods.find(p => p.id === selectedPeriodId);
-  
-  const stats = {
-    total: periodSelections.length,
-    submitted: periodSelections.filter((s: any) => s.submittedAt).length,
-    notSubmitted: periodSelections.filter((s: any) => !s.submittedAt).length,
-    assigned: periodSelections.filter((s: any) => s.assignedRouteId).length,
+  const getStatusIcon = (status: string) => {
+    switch (status) {
+      case 'UPCOMING':
+        return Clock;
+      case 'OPEN':
+        return Calendar;
+      case 'COMPLETED':
+        return CheckCircle;
+      default:
+        return Clock;
+    }
   };
 
-  useEffect(() => {
-    // Auto-select the most recent period
-    if (selectionPeriods.length > 0 && !selectedPeriodId) {
-      setSelectedPeriodId(selectionPeriods[0].id);
-    }
-  }, [selectionPeriods, selectedPeriodId]);
-
-  const toggleEmployeeSelection = (employeeId: string) => {
-    setSelectedEmployees(prev => 
-      prev.includes(employeeId) 
-        ? prev.filter(id => id !== employeeId)
-        : [...prev, employeeId]
+  if (isLoading) {
+    return (
+      <div className="flex items-center justify-center min-h-[400px]">
+        <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-primary-600"></div>
+      </div>
     );
-  };
+  }
 
   return (
-    <div>
-      <div className="flex items-center justify-between mb-6">
-        <h1 className="text-2xl font-bold text-gray-900">Selection Results</h1>
-        <div className="flex gap-3">
-          {selectedPeriodId && (
-            <>
-              <button
-                onClick={() => setShowEmailModal(true)}
-                className="btn-secondary flex items-center gap-2"
-              >
-                <Mail className="w-4 h-4" />
-                Send Notifications
-              </button>
-              <div className="relative group">
-                <button className="btn-primary flex items-center gap-2">
-                  <Download className="w-4 h-4" />
-                  Download Results
-                </button>
-                <div className="absolute right-0 mt-2 w-48 bg-white rounded-lg shadow-lg border border-gray-200 py-1 opacity-0 invisible group-hover:opacity-100 group-hover:visible transition-all">
-                  <button
-                    onClick={() => downloadResults('csv')}
-                    className="w-full text-left px-4 py-2 text-sm text-gray-700 hover:bg-gray-50 flex items-center gap-2"
-                  >
-                    <FileSpreadsheet className="w-4 h-4" />
-                    Download as CSV
-                  </button>
-                  <button
-                    onClick={() => downloadResults('pdf')}
-                    className="w-full text-left px-4 py-2 text-sm text-gray-700 hover:bg-gray-50 flex items-center gap-2"
-                  >
-                    <Download className="w-4 h-4" />
-                    Download as PDF
-                  </button>
-                </div>
-              </div>
-            </>
-          )}
-        </div>
+    <div className="max-w-6xl mx-auto">
+      <div className="mb-8">
+        <h1 className="text-2xl font-bold text-gray-900 mb-2">Selection Periods</h1>
+        <p className="text-gray-600">
+          View and manage route selection periods for {selectedTerminal?.name || 'your terminal'}
+        </p>
       </div>
 
-      {/* Period Selection */}
-      <div className="mb-6 flex flex-col lg:flex-row gap-4">
-        <div className="flex-1">
-          <label className="block text-sm font-medium text-gray-700 mb-1">
-            Selection Period
-          </label>
-          <select
-            className="form-select"
-            value={selectedPeriodId}
-            onChange={(e) => setSelectedPeriodId(e.target.value)}
-          >
-            <option value="">Select a period...</option>
-            {selectionPeriods.map(period => (
-              <option key={period.id} value={period.id}>
-                {period.name} ({period.status})
-              </option>
-            ))}
-          </select>
-        </div>
-        {selectedPeriod && (
-          <div className="lg:w-auto flex items-end">
-            <Link
-              to={`/periods/${selectedPeriod.id}/manage`}
-              className="btn-secondary"
-            >
-              Manage Period
-            </Link>
+      {/* Search */}
+      <div className="mb-6">
+        <input
+          type="text"
+          placeholder="Search periods..."
+          value={searchTerm}
+          onChange={(e) => setSearchTerm(e.target.value)}
+          className="w-full max-w-md px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary-500"
+        />
+      </div>
+
+      {/* Periods List */}
+      <div className="grid gap-4">
+        {filteredPeriods.length === 0 ? (
+          <div className="bg-gray-50 border border-gray-200 rounded-lg p-8 text-center">
+            <Users className="w-12 h-12 text-gray-400 mx-auto mb-4" />
+            <p className="text-gray-600">No selection periods found</p>
           </div>
+        ) : (
+          filteredPeriods.map(period => {
+            const StatusIcon = getStatusIcon(period.status);
+            const startDate = new Date(period.startDate);
+            const endDate = new Date(period.endDate);
+            const now = new Date();
+            const isActive = now >= startDate && now <= endDate;
+            
+            return (
+              <div 
+                key={period.id} 
+                className="bg-white border border-gray-200 rounded-lg shadow-sm hover:shadow-md transition-shadow"
+              >
+                <div className="p-6">
+                  <div className="flex items-start justify-between">
+                    <div className="flex-1">
+                      <div className="flex items-center gap-3 mb-2">
+                        <h3 className="text-lg font-semibold text-gray-900">
+                          {period.name}
+                        </h3>
+                        <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${getStatusColor(period.status)}`}>
+                          {period.status}
+                        </span>
+                      </div>
+                      
+                      <div className="flex flex-wrap items-center gap-4 text-sm text-gray-600">
+                        <div className="flex items-center gap-1">
+                          <Calendar className="w-4 h-4" />
+                          <span>
+                            {startDate.toLocaleDateString()} - {endDate.toLocaleDateString()}
+                          </span>
+                        </div>
+                        <div className="flex items-center gap-1">
+                          <StatusIcon className="w-4 h-4" />
+                          <span>
+                            {period.status === 'OPEN' && isActive ? 'Currently Active' :
+                             period.status === 'UPCOMING' ? 'Starts Soon' :
+                             period.status === 'COMPLETED' ? 'Completed' :
+                             'Status: ' + period.status}
+                          </span>
+                        </div>
+                        <div className="flex items-center gap-1">
+                          <Users className="w-4 h-4" />
+                          <span>
+                            {period.requiredSelections} selection{period.requiredSelections !== 1 ? 's' : ''} required
+                          </span>
+                        </div>
+                      </div>
+                    </div>
+                    
+                    <Link
+                      to={`/periods/${period.id}/manage`}
+                      className="inline-flex items-center gap-2 px-4 py-2 bg-primary-600 hover:bg-primary-700 text-white font-medium rounded-lg transition-colors"
+                    >
+                      Manage Period
+                      <ChevronRight className="w-4 h-4" />
+                    </Link>
+                  </div>
+                </div>
+              </div>
+            );
+          })
         )}
       </div>
 
-      {selectedPeriodId && (
-        <>
-          {/* Statistics Cards */}
-          <div className="grid grid-cols-1 md:grid-cols-4 gap-4 mb-6">
-            <div className="card p-4">
-              <div className="flex items-center justify-between">
-                <div>
-                  <p className="text-sm font-medium text-gray-600">Total Employees</p>
-                  <p className="text-2xl font-semibold text-gray-900">{stats.total}</p>
-                </div>
-                <Users className="w-8 h-8 text-gray-400" />
-              </div>
-            </div>
-            <div className="card p-4">
-              <div className="flex items-center justify-between">
-                <div>
-                  <p className="text-sm font-medium text-gray-600">Submitted</p>
-                  <p className="text-2xl font-semibold text-green-600">{stats.submitted}</p>
-                </div>
-                <CheckCircle className="w-8 h-8 text-green-400" />
-              </div>
-            </div>
-            <div className="card p-4">
-              <div className="flex items-center justify-between">
-                <div>
-                  <p className="text-sm font-medium text-gray-600">Not Submitted</p>
-                  <p className="text-2xl font-semibold text-amber-600">{stats.notSubmitted}</p>
-                </div>
-                <AlertCircle className="w-8 h-8 text-amber-400" />
-              </div>
-            </div>
-            <div className="card p-4">
-              <div className="flex items-center justify-between">
-                <div>
-                  <p className="text-sm font-medium text-gray-600">Assigned Routes</p>
-                  <p className="text-2xl font-semibold text-primary-600">{stats.assigned}</p>
-                </div>
-                <Route className="w-8 h-8 text-primary-400" />
-              </div>
-            </div>
-          </div>
-
-          {/* Search and Filters */}
-          <div className="mb-6 flex flex-col lg:flex-row gap-4">
-            <div className="flex-1 relative">
-              <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
-              <input
-                type="text"
-                placeholder="Search by employee name, email, or number..."
-                value={searchTerm}
-                onChange={(e) => setSearchTerm(e.target.value)}
-                className="form-input pl-10"
-              />
-            </div>
-            <div className="lg:w-48">
-              <select
-                className="form-select"
-                value={filterStatus}
-                onChange={(e) => setFilterStatus(e.target.value)}
-              >
-                <option value="ALL">All Employees</option>
-                <option value="SUBMITTED">Submitted</option>
-                <option value="NOT_SUBMITTED">Not Submitted</option>
-                <option value="ASSIGNED">Assigned</option>
-              </select>
-            </div>
-          </div>
-
-          {/* Results Table */}
-          <div className="card">
-            <div className="overflow-x-auto">
-              <table className="min-w-full divide-y divide-gray-200">
-                <thead className="bg-gray-50">
-                  <tr>
-                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                      <input
-                        type="checkbox"
-                        className="form-checkbox"
-                        checked={selectedEmployees.length === filteredSelections.length && filteredSelections.length > 0}
-                        onChange={(e) => {
-                          if (e.target.checked) {
-                            setSelectedEmployees(filteredSelections.map((s: any) => s.employee?.id).filter(Boolean));
-                          } else {
-                            setSelectedEmployees([]);
-                          }
-                        }}
-                      />
-                    </th>
-                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                      Employee
-                    </th>
-                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                      Status
-                    </th>
-                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                      First Choice
-                    </th>
-                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                      Second Choice
-                    </th>
-                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                      Third Choice
-                    </th>
-                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                      Assigned Route
-                    </th>
-                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                      Submitted At
-                    </th>
-                  </tr>
-                </thead>
-                <tbody className="bg-white divide-y divide-gray-200">
-                  {selectionsLoading ? (
-                    <tr>
-                      <td colSpan={8} className="px-6 py-12 text-center text-gray-500">
-                        Loading selections...
-                      </td>
-                    </tr>
-                  ) : filteredSelections.length === 0 ? (
-                    <tr>
-                      <td colSpan={8} className="px-6 py-12 text-center text-gray-500">
-                        No selections found
-                      </td>
-                    </tr>
-                  ) : (
-                    filteredSelections.map((selection: any) => (
-                      <tr key={selection.id || selection.employee?.id}>
-                        <td className="px-6 py-4 whitespace-nowrap">
-                          <input
-                            type="checkbox"
-                            className="form-checkbox"
-                            checked={selectedEmployees.includes(selection.employee?.id)}
-                            onChange={() => toggleEmployeeSelection(selection.employee?.id)}
-                          />
-                        </td>
-                        <td className="px-6 py-4 whitespace-nowrap">
-                          <div>
-                            <div className="text-sm font-medium text-gray-900">
-                              {selection.employee?.name || 'Unknown'}
-                            </div>
-                            <div className="text-sm text-gray-500">
-                              {selection.employee?.email}
-                            </div>
-                            {selection.employee?.employeeNumber && (
-                              <div className="text-xs text-gray-400">
-                                #{selection.employee.employeeNumber}
-                              </div>
-                            )}
-                          </div>
-                        </td>
-                        <td className="px-6 py-4 whitespace-nowrap">
-                          {selection.submittedAt ? (
-                            <span className="inline-flex items-center px-2 py-1 rounded-full text-xs font-medium bg-green-100 text-green-800">
-                              Submitted
-                            </span>
-                          ) : (
-                            <span className="inline-flex items-center px-2 py-1 rounded-full text-xs font-medium bg-amber-100 text-amber-800">
-                              Not Submitted
-                            </span>
-                          )}
-                        </td>
-                        <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
-                          {selection.firstChoice ? (
-                            <div>
-                              <div className="font-medium">#{selection.firstChoice.runNumber}</div>
-                              <div className="text-xs text-gray-500">{selection.firstChoice.origin} → {selection.firstChoice.destination}</div>
-                            </div>
-                          ) : '-'}
-                        </td>
-                        <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
-                          {selection.secondChoice ? (
-                            <div>
-                              <div className="font-medium">#{selection.secondChoice.runNumber}</div>
-                              <div className="text-xs text-gray-500">{selection.secondChoice.origin} → {selection.secondChoice.destination}</div>
-                            </div>
-                          ) : '-'}
-                        </td>
-                        <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
-                          {selection.thirdChoice ? (
-                            <div>
-                              <div className="font-medium">#{selection.thirdChoice.runNumber}</div>
-                              <div className="text-xs text-gray-500">{selection.thirdChoice.origin} → {selection.thirdChoice.destination}</div>
-                            </div>
-                          ) : '-'}
-                        </td>
-                        <td className="px-6 py-4 whitespace-nowrap text-sm">
-                          {selection.assignedRoute ? (
-                            <div className="text-primary-600 font-medium">
-                              <div>#{selection.assignedRoute.runNumber}</div>
-                              <div className="text-xs">{selection.assignedRoute.origin} → {selection.assignedRoute.destination}</div>
-                            </div>
-                          ) : '-'}
-                        </td>
-                        <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
-                          {selection.submittedAt ? new Date(selection.submittedAt).toLocaleString() : '-'}
-                        </td>
-                      </tr>
-                    ))
-                  )}
-                </tbody>
-              </table>
-            </div>
-          </div>
-        </>
-      )}
-
-      {/* Email Modal */}
-      {showEmailModal && (
-        <div className="fixed inset-0 bg-black/50 backdrop-blur-sm z-50 flex items-center justify-center p-4">
-          <div className="bg-white rounded-lg shadow-xl max-w-md w-full p-6">
-            <h3 className="text-lg font-semibold text-gray-900 mb-4">
-              Send Email Notifications
-            </h3>
-            <p className="text-gray-600 mb-4">
-              Send selection results to {selectedEmployees.length > 0 ? `${selectedEmployees.length} selected employees` : 'all employees'}.
-            </p>
-            <div className="flex justify-end gap-3">
-              <button
-                onClick={() => {
-                  setShowEmailModal(false);
-                  setSelectedEmployees([]);
-                }}
-                className="btn-secondary"
-              >
-                Cancel
-              </button>
-              <button
-                onClick={() => sendEmailNotifications.mutate({
-                  periodId: selectedPeriodId,
-                  employeeIds: selectedEmployees.length > 0 ? selectedEmployees : undefined
-                })}
-                disabled={sendEmailNotifications.isPending}
-                className="btn-primary"
-              >
-                {sendEmailNotifications.isPending ? 'Sending...' : 'Send Emails'}
-              </button>
-            </div>
-          </div>
+      {/* Admin Note */}
+      {user?.role === 'Admin' && (
+        <div className="mt-8 p-4 bg-blue-50 border border-blue-200 rounded-lg">
+          <p className="text-sm text-blue-800">
+            <strong>Admin Note:</strong> Click "Manage Period" to view submissions, process assignments, and send notifications.
+          </p>
         </div>
       )}
     </div>
