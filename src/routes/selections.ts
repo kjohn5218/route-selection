@@ -5,6 +5,7 @@ import { authenticateToken, requireAdmin, requireAdminOrSelf } from '../middlewa
 import emailService from '../services/email.js';
 import { FileProcessor } from '../utils/fileProcessor.js';
 import PDFDocument from 'pdfkit';
+import { AssignmentEngine } from '../services/assignmentEngine.js';
 
 const router = Router();
 
@@ -904,8 +905,9 @@ router.post('/admin', authenticateToken, requireAdmin, async (req: Request, res:
       return res.status(404).json({ error: 'Selection period not found' });
     }
 
-    if (selectionPeriod.status !== 'Open') {
-      return res.status(400).json({ error: 'Selection period is not open' });
+    // Admin can create selections for any period status except COMPLETED
+    if (selectionPeriod.status === 'COMPLETED') {
+      return res.status(400).json({ error: 'Cannot add selections to completed period' });
     }
 
     // Check if selection already exists
@@ -990,6 +992,97 @@ router.post('/admin', authenticateToken, requireAdmin, async (req: Request, res:
     if (error instanceof z.ZodError) {
       return res.status(400).json({ error: 'Invalid input', details: error.errors });
     }
+    res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
+// POST /api/selections/process/:periodId - Process manual selections for a period
+router.post('/process/:periodId', authenticateToken, requireAdmin, async (req: Request, res: Response) => {
+  try {
+    const { periodId } = req.params;
+
+    // Check if selection period exists and is in the right status
+    const selectionPeriod = await prisma.selectionPeriod.findUnique({
+      where: { id: periodId },
+      include: {
+        terminal: true,
+      },
+    });
+
+    if (!selectionPeriod) {
+      return res.status(404).json({ error: 'Selection period not found' });
+    }
+
+    if (selectionPeriod.status !== 'OPEN') {
+      return res.status(400).json({ 
+        error: 'Selection period must be open before processing assignments' 
+      });
+    }
+
+    // Update status to processing
+    await prisma.selectionPeriod.update({
+      where: { id: periodId },
+      data: { status: 'PROCESSING' },
+    });
+
+    try {
+      const engine = new AssignmentEngine();
+      const assignments = await engine.processAssignments(periodId);
+
+      // Validate assignments
+      const validation = engine.validateAssignments();
+      if (!validation.isValid) {
+        // Reset status if validation failed
+        await prisma.selectionPeriod.update({
+          where: { id: periodId },
+          data: { status: 'OPEN' },
+        });
+        return res.status(400).json({ 
+          error: 'Assignment validation failed', 
+          details: validation.errors 
+        });
+      }
+
+      const summary = engine.getAssignmentSummary();
+
+      // Save assignments to database
+      await engine.saveAssignments(periodId);
+
+      // Update selection period status
+      await prisma.selectionPeriod.update({
+        where: { id: periodId },
+        data: { status: 'COMPLETED' },
+      });
+
+      // Log the assignment processing
+      await prisma.auditLog.create({
+        data: {
+          userId: req.user!.id,
+          action: 'PROCESS_SELECTIONS',
+          resource: 'SelectionPeriod',
+          details: `Processed assignments for period ${selectionPeriod.name}. Total: ${summary.totalEmployees} employees, ${summary.assignedRoutes} routes assigned, ${summary.floatPoolEmployees} in float pool`,
+        },
+      });
+
+      res.json({
+        success: true,
+        summary,
+        totalProcessed: assignments.length,
+        totalAssigned: summary.assignedRoutes,
+        totalUnassigned: summary.floatPoolEmployees,
+      });
+
+    } catch (processingError) {
+      // Reset status to open if processing failed
+      await prisma.selectionPeriod.update({
+        where: { id: periodId },
+        data: { status: 'OPEN' },
+      });
+      throw processingError;
+    }
+
+  } catch (error) {
+    console.error('Process selections error:', error);
     res.status(500).json({ error: 'Internal server error' });
   }
 });

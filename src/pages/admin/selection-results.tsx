@@ -9,6 +9,8 @@ import { toast } from 'react-hot-toast'
 import { Download, Mail, ArrowLeft, Search, Printer } from 'lucide-react'
 import type { Assignment, Employee, Route, SelectionPeriod } from '@prisma/client'
 
+const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3001/api'
+
 type AssignmentWithDetails = Assignment & {
   employee: Employee
   route: Route | null
@@ -24,6 +26,7 @@ export default function SelectionResults() {
   const [sendingEmails, setSendingEmails] = useState(false)
 
   useEffect(() => {
+    console.log('Selection Results - periodId:', periodId)
     if (periodId) {
       fetchData()
     }
@@ -32,15 +35,35 @@ export default function SelectionResults() {
   const fetchData = async () => {
     try {
       // Fetch selection period
-      const periodRes = await fetch(`/api/selection-periods/${periodId}`)
-      if (!periodRes.ok) throw new Error('Failed to fetch period')
+      const periodRes = await fetch(`${API_BASE_URL}/periods/${periodId}`, {
+        headers: {
+          'Authorization': `Bearer ${localStorage.getItem('token')}`,
+          'Content-Type': 'application/json'
+        }
+      })
+      if (!periodRes.ok) {
+        const errorText = await periodRes.text()
+        console.error('Period fetch failed:', periodRes.status, errorText)
+        throw new Error('Failed to fetch period')
+      }
       const periodData = await periodRes.json()
+      console.log('Fetched period:', periodData)
       setPeriod(periodData)
 
       // Fetch assignments
-      const assignmentsRes = await fetch(`/api/assignments?periodId=${periodId}`)
-      if (!assignmentsRes.ok) throw new Error('Failed to fetch assignments')
+      const assignmentsRes = await fetch(`${API_BASE_URL}/assignments/period/${periodId}`, {
+        headers: {
+          'Authorization': `Bearer ${localStorage.getItem('token')}`,
+          'Content-Type': 'application/json'
+        }
+      })
+      if (!assignmentsRes.ok) {
+        const errorText = await assignmentsRes.text()
+        console.error('Assignments fetch failed:', assignmentsRes.status, errorText)
+        throw new Error('Failed to fetch assignments')
+      }
       const assignmentsData = await assignmentsRes.json()
+      console.log('Fetched assignments:', assignmentsData)
       setAssignments(assignmentsData)
     } catch (error) {
       console.error('Error fetching data:', error)
@@ -52,7 +75,11 @@ export default function SelectionResults() {
 
   const handleExport = async () => {
     try {
-      const response = await fetch(`/api/selection-periods/${periodId}/export`)
+      const response = await fetch(`${API_BASE_URL}/selections/download/${periodId}`, {
+        headers: {
+          'Authorization': `Bearer ${localStorage.getItem('token')}`
+        }
+      })
       if (!response.ok) throw new Error('Failed to export results')
       
       const blob = await response.blob()
@@ -75,8 +102,12 @@ export default function SelectionResults() {
   const handleSendEmails = async () => {
     setSendingEmails(true)
     try {
-      const response = await fetch(`/api/selection-periods/${periodId}/notify`, {
+      const response = await fetch(`${API_BASE_URL}/assignments/notify/${periodId}`, {
         method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${localStorage.getItem('token')}`,
+          'Content-Type': 'application/json'
+        }
       })
 
       if (!response.ok) throw new Error('Failed to send notifications')
@@ -106,6 +137,11 @@ export default function SelectionResults() {
 
   const assignedCount = assignments.filter(a => a.route).length
   const floatPoolCount = assignments.filter(a => !a.route).length
+  
+  // Calculate choice distribution
+  const firstChoiceCount = assignments.filter(a => a.choiceReceived === 1).length
+  const secondChoiceCount = assignments.filter(a => a.choiceReceived === 2).length
+  const thirdChoiceCount = assignments.filter(a => a.choiceReceived === 3).length
 
   if (loading) {
     return (
@@ -200,6 +236,39 @@ export default function SelectionResults() {
           </Card>
         </div>
 
+        {/* Choice Distribution */}
+        <div className="grid grid-cols-4 gap-4 mb-6">
+          <Card>
+            <CardHeader className="pb-2">
+              <CardTitle className="text-sm font-medium">Choice Distribution</CardTitle>
+            </CardHeader>
+            <CardContent>
+              <div className="text-xl font-bold text-blue-600">{firstChoiceCount}</div>
+              <p className="text-xs text-muted-foreground">1st Choice</p>
+            </CardContent>
+          </Card>
+          <Card>
+            <CardContent className="pt-6">
+              <div className="text-xl font-bold text-purple-600">{secondChoiceCount}</div>
+              <p className="text-xs text-muted-foreground">2nd Choice</p>
+            </CardContent>
+          </Card>
+          <Card>
+            <CardContent className="pt-6">
+              <div className="text-xl font-bold text-pink-600">{thirdChoiceCount}</div>
+              <p className="text-xs text-muted-foreground">3rd Choice</p>
+            </CardContent>
+          </Card>
+          <Card>
+            <CardContent className="pt-6">
+              <div className="text-xl font-bold text-gray-600">
+                {assignedCount > 0 ? Math.round((firstChoiceCount / assignedCount) * 100) : 0}%
+              </div>
+              <p className="text-xs text-muted-foreground">1st Choice Rate</p>
+            </CardContent>
+          </Card>
+        </div>
+
         {/* Search */}
         <div className="mb-4 no-print">
           <div className="relative">
@@ -223,6 +292,11 @@ export default function SelectionResults() {
             </CardDescription>
           </CardHeader>
           <CardContent>
+            {assignments.length === 0 ? (
+              <div className="text-center py-8 text-gray-500">
+                No assignments found. Please ensure selections have been processed.
+              </div>
+            ) : (
             <div className="overflow-x-auto">
               <table className="w-full">
                 <thead>
@@ -263,11 +337,11 @@ export default function SelectionResults() {
                         )}
                       </td>
                       <td className="py-2 px-4">
-                        {assignment.choiceNumber ? (
+                        {assignment.choiceReceived ? (
                           <Badge variant="outline">
-                            {assignment.choiceNumber === 1 && '1st Choice'}
-                            {assignment.choiceNumber === 2 && '2nd Choice'}
-                            {assignment.choiceNumber === 3 && '3rd Choice'}
+                            {assignment.choiceReceived === 1 && '1st Choice'}
+                            {assignment.choiceReceived === 2 && '2nd Choice'}
+                            {assignment.choiceReceived === 3 && '3rd Choice'}
                           </Badge>
                         ) : (
                           '-'
@@ -285,6 +359,7 @@ export default function SelectionResults() {
                 </tbody>
               </table>
             </div>
+            )}
           </CardContent>
         </Card>
 

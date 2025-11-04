@@ -8,11 +8,13 @@ import { toast } from 'react-hot-toast'
 import { Play, ArrowLeft, Download, Eye } from 'lucide-react'
 import type { SelectionPeriod, Selection, Employee, Route } from '@prisma/client'
 
+const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3001/api'
+
 type SelectionWithDetails = Selection & {
   employee: Employee
-  choice1: Route | null
-  choice2: Route | null
-  choice3: Route | null
+  firstChoice: Route | null
+  secondChoice: Route | null
+  thirdChoice: Route | null
 }
 
 export default function ProcessSelections() {
@@ -33,13 +35,23 @@ export default function ProcessSelections() {
   const fetchData = async () => {
     try {
       // Fetch selection period
-      const periodRes = await fetch(`/api/selection-periods/${periodId}`)
+      const periodRes = await fetch(`${API_BASE_URL}/periods/${periodId}`, {
+        headers: {
+          'Authorization': `Bearer ${localStorage.getItem('token')}`,
+          'Content-Type': 'application/json'
+        }
+      })
       if (!periodRes.ok) throw new Error('Failed to fetch period')
       const periodData = await periodRes.json()
       setPeriod(periodData)
 
       // Fetch all selections for this period
-      const selectionsRes = await fetch(`/api/selections?periodId=${periodId}`)
+      const selectionsRes = await fetch(`${API_BASE_URL}/selections?selectionPeriodId=${periodId}`, {
+        headers: {
+          'Authorization': `Bearer ${localStorage.getItem('token')}`,
+          'Content-Type': 'application/json'
+        }
+      })
       if (!selectionsRes.ok) throw new Error('Failed to fetch selections')
       const selectionsData = await selectionsRes.json()
       setSelections(selectionsData)
@@ -56,8 +68,12 @@ export default function ProcessSelections() {
 
     setProcessing(true)
     try {
-      const response = await fetch(`/api/selection-periods/${periodId}/process`, {
+      const response = await fetch(`${API_BASE_URL}/selections/process/${periodId}`, {
         method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${localStorage.getItem('token')}`,
+          'Content-Type': 'application/json'
+        }
       })
 
       if (!response.ok) {
@@ -85,7 +101,11 @@ export default function ProcessSelections() {
 
   const handleExportResults = async () => {
     try {
-      const response = await fetch(`/api/selection-periods/${periodId}/export`)
+      const response = await fetch(`${API_BASE_URL}/selections/download/${periodId}`, {
+        headers: {
+          'Authorization': `Bearer ${localStorage.getItem('token')}`
+        }
+      })
       if (!response.ok) throw new Error('Failed to export results')
       
       const blob = await response.blob()
@@ -219,9 +239,9 @@ export default function ProcessSelections() {
                           </span>
                         </div>
                         <div className="text-gray-600">
-                          Choices: {selection.choice1?.runNumber || '-'}, 
-                          {selection.choice2?.runNumber || '-'}, 
-                          {selection.choice3?.runNumber || '-'}
+                          Choices: {selection.firstChoice?.runNumber || '-'}, 
+                          {selection.secondChoice?.runNumber || '-'}, 
+                          {selection.thirdChoice?.runNumber || '-'}
                         </div>
                       </div>
                     ))}

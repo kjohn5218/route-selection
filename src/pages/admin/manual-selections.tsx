@@ -25,7 +25,32 @@ interface ManualSelection {
   choice3: string
 }
 
+const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3001/api'
+
+// Helper function to handle API errors
+const handleApiError = async (response: Response, context: string) => {
+  if (!response.ok) {
+    console.error(`[${context}] API Error:`, {
+      status: response.status,
+      statusText: response.statusText,
+      url: response.url
+    })
+    
+    try {
+      const errorData = await response.json()
+      console.error(`[${context}] Error details:`, errorData)
+      throw new Error(errorData.error || `${context} failed`)
+    } catch (e) {
+      // If JSON parsing fails, try text
+      const errorText = await response.text()
+      console.error(`[${context}] Error text:`, errorText)
+      throw new Error(`${context} failed: ${response.status} ${response.statusText}`)
+    }
+  }
+}
+
 export default function ManualSelections() {
+  console.log('=== ManualSelections Component Mounted ===')
   const router = useRouter()
   const [terminals, setTerminals] = useState<Terminal[]>([])
   const [selectedTerminal, setSelectedTerminal] = useState('')
@@ -37,8 +62,22 @@ export default function ManualSelections() {
   const [loading, setLoading] = useState(false)
   const [saving, setSaving] = useState(false)
   const [searchTerm, setSearchTerm] = useState('')
+  
+  // Log auth token
+  console.log('Auth token exists:', !!localStorage.getItem('token'))
+  console.log('API Base URL:', API_BASE_URL)
+
+  // Global error handler
+  useEffect(() => {
+    const handleError = (event: ErrorEvent) => {
+      console.error('Global error caught:', event.error)
+    }
+    window.addEventListener('error', handleError)
+    return () => window.removeEventListener('error', handleError)
+  }, [])
 
   useEffect(() => {
+    console.log('Fetching terminals on mount...')
     fetchTerminals()
   }, [])
 
@@ -56,8 +95,13 @@ export default function ManualSelections() {
 
   const fetchTerminals = async () => {
     try {
-      const response = await fetch('/api/terminals')
-      if (!response.ok) throw new Error('Failed to fetch terminals')
+      const response = await fetch(`${API_BASE_URL}/terminals`, {
+        headers: {
+          'Authorization': `Bearer ${localStorage.getItem('token')}`,
+          'Content-Type': 'application/json'
+        }
+      })
+      await handleApiError(response, 'Fetch terminals')
       const data = await response.json()
       setTerminals(data)
     } catch (error) {
@@ -68,8 +112,13 @@ export default function ManualSelections() {
 
   const fetchSelectionPeriods = async () => {
     try {
-      const response = await fetch(`/api/selection-periods?terminalId=${selectedTerminal}&status=OPEN`)
-      if (!response.ok) throw new Error('Failed to fetch selection periods')
+      const response = await fetch(`${API_BASE_URL}/periods?terminalId=${selectedTerminal}`, {
+        headers: {
+          'Authorization': `Bearer ${localStorage.getItem('token')}`,
+          'Content-Type': 'application/json'
+        }
+      })
+      await handleApiError(response, 'Fetch selection periods')
       const data = await response.json()
       setSelectionPeriods(data)
     } catch (error) {
@@ -81,9 +130,19 @@ export default function ManualSelections() {
   const fetchEmployeesAndRoutes = async () => {
     setLoading(true)
     try {
+      console.log('Fetching employees and routes for:', {
+        terminalId: selectedTerminal,
+        periodId: selectedPeriod
+      })
+      
       // Fetch eligible employees
-      const empResponse = await fetch(`/api/employees?terminalId=${selectedTerminal}`)
-      if (!empResponse.ok) throw new Error('Failed to fetch employees')
+      const empResponse = await fetch(`${API_BASE_URL}/employees?terminalId=${selectedTerminal}`, {
+        headers: {
+          'Authorization': `Bearer ${localStorage.getItem('token')}`,
+          'Content-Type': 'application/json'
+        }
+      })
+      await handleApiError(empResponse, 'Fetch employees')
       const empData = await empResponse.json()
       
       // Sort employees by seniority
@@ -108,9 +167,15 @@ export default function ManualSelections() {
       setSelections(initialSelections)
 
       // Fetch routes for this period
-      const routeResponse = await fetch(`/api/selection-periods/${selectedPeriod}/routes`)
-      if (!routeResponse.ok) throw new Error('Failed to fetch routes')
+      const routeResponse = await fetch(`${API_BASE_URL}/periods/${selectedPeriod}/routes`, {
+        headers: {
+          'Authorization': `Bearer ${localStorage.getItem('token')}`,
+          'Content-Type': 'application/json'
+        }
+      })
+      await handleApiError(routeResponse, 'Fetch routes')
       const routeData = await routeResponse.json()
+      console.log('Fetched routes:', routeData)
       setRoutes(routeData)
     } catch (error) {
       console.error('Error fetching data:', error)
@@ -123,7 +188,7 @@ export default function ManualSelections() {
   const handleSelectionChange = (employeeId: string, field: 'choice1' | 'choice2' | 'choice3', value: string) => {
     setSelections(prev => prev.map(sel => 
       sel.employeeId === employeeId 
-        ? { ...sel, [field]: value }
+        ? { ...sel, [field]: value === 'none' ? '' : value }
         : sel
     ))
   }
@@ -143,23 +208,24 @@ export default function ManualSelections() {
       const promises = validSelections.map(async (selection) => {
         const payload = {
           employeeId: selection.employeeId,
-          periodId: selectedPeriod,
-          choice1Id: selection.choice1 || null,
-          choice2Id: selection.choice2 || null,
-          choice3Id: selection.choice3 || null,
-          isManualEntry: true,
+          selectionPeriodId: selectedPeriod,
+          firstChoiceId: selection.choice1 || null,
+          secondChoiceId: selection.choice2 || null,
+          thirdChoiceId: selection.choice3 || null,
         }
+        
+        console.log('Saving selection with payload:', payload)
 
-        const response = await fetch('/api/selections', {
+        const response = await fetch(`${API_BASE_URL}/selections/admin`, {
           method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
+          headers: { 
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${localStorage.getItem('token')}` 
+          },
           body: JSON.stringify(payload),
         })
 
-        if (!response.ok) {
-          const error = await response.json()
-          throw new Error(error.error || 'Failed to save selection')
-        }
+        await handleApiError(response, 'Save selection')
 
         return response.json()
       })
@@ -176,6 +242,11 @@ export default function ManualSelections() {
       setSaving(false)
     }
   }
+
+  // Debug routes
+  useEffect(() => {
+    console.log('Routes state updated:', routes.length, routes)
+  }, [routes])
 
   const filteredEmployees = employees.filter(emp => {
     const fullName = `${emp.firstName} ${emp.lastName}`.toLowerCase()
@@ -252,7 +323,7 @@ export default function ManualSelections() {
                   <SelectContent>
                     {selectionPeriods.map((period) => (
                       <SelectItem key={period.id} value={period.id}>
-                        {period.name}
+                        {period.name} ({period.status})
                       </SelectItem>
                     ))}
                   </SelectContent>
@@ -309,6 +380,7 @@ export default function ManualSelections() {
                     <tbody>
                       {filteredSelections.map((selection, index) => {
                         const employee = employees.find(emp => emp.id === selection.employeeId)
+                        console.log('Rendering selection row for:', selection.employeeName, 'Routes available:', routes.length)
                         return (
                           <tr key={selection.employeeId} className="border-b">
                             <td className="py-2 px-4">
@@ -329,19 +401,23 @@ export default function ManualSelections() {
                                   <SelectValue placeholder="Select" />
                                 </SelectTrigger>
                                 <SelectContent>
-                                  <SelectItem value="">None</SelectItem>
-                                  {routes
-                                    .filter(route => {
-                                      if (!employee) return false
-                                      if (route.requiresDoublesEndorsement && !employee.doublesEndorsement) return false
-                                      if (route.requiresChainExperience && !employee.chainExperience) return false
-                                      return true
-                                    })
-                                    .map((route) => (
-                                      <SelectItem key={route.id} value={route.id}>
-                                        {route.runNumber}
-                                      </SelectItem>
-                                    ))}
+                                  <SelectItem value="none">None</SelectItem>
+                                  {routes && routes.length > 0 ? (
+                                    routes
+                                      .filter(route => {
+                                        if (!employee) return false
+                                        if (route.requiresDoublesEndorsement && !employee.doublesEndorsement) return false
+                                        if (route.requiresChainExperience && !employee.chainExperience) return false
+                                        return true
+                                      })
+                                      .map((route) => (
+                                        <SelectItem key={route.id} value={route.id}>
+                                          Route {route.runNumber}
+                                        </SelectItem>
+                                      ))
+                                  ) : (
+                                    <SelectItem value="no-routes" disabled>No routes available</SelectItem>
+                                  )}
                                 </SelectContent>
                               </Select>
                             </td>
@@ -354,19 +430,23 @@ export default function ManualSelections() {
                                   <SelectValue placeholder="Select" />
                                 </SelectTrigger>
                                 <SelectContent>
-                                  <SelectItem value="">None</SelectItem>
-                                  {routes
-                                    .filter(route => {
-                                      if (!employee) return false
-                                      if (route.requiresDoublesEndorsement && !employee.doublesEndorsement) return false
-                                      if (route.requiresChainExperience && !employee.chainExperience) return false
-                                      return true
-                                    })
-                                    .map((route) => (
-                                      <SelectItem key={route.id} value={route.id}>
-                                        {route.runNumber}
-                                      </SelectItem>
-                                    ))}
+                                  <SelectItem value="none">None</SelectItem>
+                                  {routes && routes.length > 0 ? (
+                                    routes
+                                      .filter(route => {
+                                        if (!employee) return false
+                                        if (route.requiresDoublesEndorsement && !employee.doublesEndorsement) return false
+                                        if (route.requiresChainExperience && !employee.chainExperience) return false
+                                        return true
+                                      })
+                                      .map((route) => (
+                                        <SelectItem key={route.id} value={route.id}>
+                                          Route {route.runNumber}
+                                        </SelectItem>
+                                      ))
+                                  ) : (
+                                    <SelectItem value="no-routes" disabled>No routes available</SelectItem>
+                                  )}
                                 </SelectContent>
                               </Select>
                             </td>
@@ -379,19 +459,23 @@ export default function ManualSelections() {
                                   <SelectValue placeholder="Select" />
                                 </SelectTrigger>
                                 <SelectContent>
-                                  <SelectItem value="">None</SelectItem>
-                                  {routes
-                                    .filter(route => {
-                                      if (!employee) return false
-                                      if (route.requiresDoublesEndorsement && !employee.doublesEndorsement) return false
-                                      if (route.requiresChainExperience && !employee.chainExperience) return false
-                                      return true
-                                    })
-                                    .map((route) => (
-                                      <SelectItem key={route.id} value={route.id}>
-                                        {route.runNumber}
-                                      </SelectItem>
-                                    ))}
+                                  <SelectItem value="none">None</SelectItem>
+                                  {routes && routes.length > 0 ? (
+                                    routes
+                                      .filter(route => {
+                                        if (!employee) return false
+                                        if (route.requiresDoublesEndorsement && !employee.doublesEndorsement) return false
+                                        if (route.requiresChainExperience && !employee.chainExperience) return false
+                                        return true
+                                      })
+                                      .map((route) => (
+                                        <SelectItem key={route.id} value={route.id}>
+                                          Route {route.runNumber}
+                                        </SelectItem>
+                                      ))
+                                  ) : (
+                                    <SelectItem value="no-routes" disabled>No routes available</SelectItem>
+                                  )}
                                 </SelectContent>
                               </Select>
                             </td>

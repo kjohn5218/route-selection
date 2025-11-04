@@ -52,6 +52,15 @@ export class AssignmentEngine {
   }
 
   private async loadData(selectionPeriodId: string): Promise<void> {
+    // Get the selection period to find the terminal
+    const selectionPeriod = await prisma.selectionPeriod.findUnique({
+      where: { id: selectionPeriodId },
+    });
+
+    if (!selectionPeriod) {
+      throw new Error('Selection period not found');
+    }
+
     // Load all selections for the period
     this.selections = await prisma.selection.findMany({
       where: { selectionPeriodId },
@@ -60,10 +69,15 @@ export class AssignmentEngine {
       },
     });
 
-    // Load all active routes
-    const routes = await prisma.route.findMany({
-      where: { isActive: true },
+    // Load routes associated with the selection period
+    const periodRoutes = await prisma.periodRoute.findMany({
+      where: { selectionPeriodId },
+      include: {
+        route: true,
+      },
     });
+
+    const routes = periodRoutes.map(pr => pr.route);
 
     this.routes.clear();
     routes.forEach(route => {
@@ -75,6 +89,7 @@ export class AssignmentEngine {
     const employeesWithoutSelections = await prisma.employee.findMany({
       where: {
         isEligible: true,
+        terminalId: selectionPeriod.terminalId,
         id: { notIn: employeesWithSelections },
       },
     });

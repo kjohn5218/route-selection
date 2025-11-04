@@ -65,6 +65,7 @@ router.get('/', authenticateToken, requireAdmin, async (req: Request, res: Respo
 router.get('/period/:periodId', authenticateToken, requireAdmin, async (req: Request, res: Response) => {
   try {
     const { periodId } = req.params;
+    console.log('Fetching assignments for period:', periodId);
 
     const assignments = await prisma.assignment.findMany({
       where: {
@@ -77,6 +78,7 @@ router.get('/period/:periodId', authenticateToken, requireAdmin, async (req: Req
             employeeId: true,
             firstName: true,
             lastName: true,
+            email: true,
             hireDate: true,
             doublesEndorsement: true,
             chainExperience: true,
@@ -102,6 +104,7 @@ router.get('/period/:periodId', authenticateToken, requireAdmin, async (req: Req
       },
     });
 
+    console.log(`Found ${assignments.length} assignments for period ${periodId}`);
     res.json(assignments);
   } catch (error) {
     console.error('Get period assignments error:', error);

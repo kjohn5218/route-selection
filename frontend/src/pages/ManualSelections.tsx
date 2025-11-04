@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import { useQuery, useMutation } from '@tanstack/react-query';
-import { Link } from 'react-router-dom';
+import { Link, useNavigate } from 'react-router-dom';
 import apiClient from '../api/client';
 import { useTerminal } from '../contexts/TerminalContext';
 import { toast } from 'react-hot-toast';
@@ -44,9 +44,13 @@ interface ManualSelection {
 
 const ManualSelections = () => {
   const { selectedTerminal } = useTerminal();
+  const navigate = useNavigate();
   const [selectedPeriod, setSelectedPeriod] = useState('');
   const [searchTerm, setSearchTerm] = useState('');
   const [selections, setSelections] = useState<ManualSelection[]>([]);
+  
+  console.log('ManualSelections - Terminal:', selectedTerminal);
+  console.log('ManualSelections - Selected Period:', selectedPeriod);
 
   // Fetch open selection periods
   const { data: periods = [] } = useQuery<SelectionPeriod[]>({
@@ -54,7 +58,7 @@ const ManualSelections = () => {
     queryFn: async () => {
       if (!selectedTerminal) return [];
       const response = await apiClient.get('/periods', {
-        params: { terminalId: selectedTerminal.id, status: 'Open' }
+        params: { terminalId: selectedTerminal.id }
       });
       return response.data;
     },
@@ -74,15 +78,31 @@ const ManualSelections = () => {
     enabled: !!selectedTerminal && !!selectedPeriod,
   });
 
-  const { data: routes = [] } = useQuery<Route[]>({
+  const { data: routes = [], error: routesError, isLoading: routesLoading } = useQuery<Route[]>({
     queryKey: ['period-routes', selectedPeriod],
     queryFn: async () => {
       if (!selectedPeriod) return [];
-      const response = await apiClient.get(`/routes/available/${selectedPeriod}`);
+      console.log('Fetching routes for period:', selectedPeriod);
+      const response = await apiClient.get(`/periods/${selectedPeriod}/routes`);
+      console.log('Routes response:', response.data);
       return response.data;
     },
     enabled: !!selectedPeriod,
+    onError: (error: any) => {
+      console.error('Failed to fetch routes:', error);
+      console.error('Routes error details:', error.response?.data);
+    }
   });
+
+  // Log routes state
+  useEffect(() => {
+    console.log('Routes state:', { 
+      routes, 
+      routesError, 
+      routesLoading,
+      routesLength: routes.length 
+    });
+  }, [routes, routesError, routesLoading]);
 
   // Initialize selections when employees are loaded
   useEffect(() => {
@@ -126,7 +146,7 @@ const ManualSelections = () => {
     onSuccess: (data) => {
       toast.success(`Saved ${data.length} selections successfully`);
       // Navigate to process page
-      window.location.href = `/periods/${selectedPeriod}/manage`;
+      navigate(`/process-selections/${selectedPeriod}`);
     },
     onError: (error: any) => {
       toast.error(error.response?.data?.message || 'Failed to save selections');
@@ -263,8 +283,11 @@ const ManualSelections = () => {
                   </tr>
                 </thead>
                 <tbody className="bg-white divide-y divide-gray-200">
-                  {filteredSelections.map((selection) => {
+                  {filteredSelections.map((selection, idx) => {
                     const eligibleRoutes = getEligibleRoutes(selection.employeeId);
+                    if (idx === 0) {
+                      console.log('First employee eligible routes:', eligibleRoutes.length);
+                    }
                     return (
                       <tr key={selection.employeeId}>
                         <td className="px-6 py-4 whitespace-nowrap">

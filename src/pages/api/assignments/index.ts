@@ -15,7 +15,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       const { periodId, employeeId } = req.query
 
       const where: any = {}
-      if (periodId) where.periodId = periodId
+      if (periodId) where.selectionPeriodId = periodId
       if (employeeId) where.employeeId = employeeId
 
       // Check if user is a driver and restrict access
@@ -36,7 +36,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
         include: {
           employee: true,
           route: true,
-          period: true,
+          selectionPeriod: true,
         },
         orderBy: [
           { employee: { hireDate: 'asc' } },

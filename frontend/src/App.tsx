@@ -18,6 +18,8 @@ import Users from './pages/Users';
 import Terminals from './pages/Terminals';
 import ManualSelections from './pages/ManualSelections';
 import PrintForms from './pages/PrintForms';
+import ProcessSelections from './pages/ProcessSelections';
+import SelectionResults from './pages/SelectionResults';
 
 const queryClient = new QueryClient({
   defaultOptions: {
@@ -58,6 +60,8 @@ function App() {
               <Route path="terminals" element={<Terminals />} />
               <Route path="manual-selections" element={<ManualSelections />} />
               <Route path="print-forms" element={<PrintForms />} />
+              <Route path="process-selections/:periodId" element={<ProcessSelections />} />
+              <Route path="selection-results/:periodId" element={<SelectionResults />} />
             </Route>
           </Routes>
           </TerminalProvider>
