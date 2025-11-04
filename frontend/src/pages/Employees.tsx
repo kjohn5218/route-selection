@@ -205,20 +205,20 @@ const Employees = () => {
       {/* Filters and Search */}
       <div className="card p-6">
         <div className="flex flex-col sm:flex-row gap-4">
-          <div className="flex-1 relative">
-            <Search className="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
+          <div className="flex-1 relative max-w-lg">
+            <Search className="w-5 h-5 absolute left-4 top-1/2 -translate-y-1/2 text-gray-400" />
             <input
               type="text"
               placeholder="Search employees..."
               value={searchTerm}
               onChange={(e) => setSearchTerm(e.target.value)}
-              className="input-field pl-10"
+              className="input-field pl-12 py-3 text-base"
             />
           </div>
           <select
             value={statusFilter}
             onChange={(e) => setStatusFilter(e.target.value as 'all' | 'active' | 'inactive')}
-            className="input-field px-3 py-2"
+            className="input-field py-3 text-base w-full sm:w-auto"
           >
             <option value="all">All Employees</option>
             <option value="active">Eligible Only</option>
