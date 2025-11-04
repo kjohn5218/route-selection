@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react';
 import { useQuery, useMutation } from '@tanstack/react-query';
+import { Link } from 'react-router-dom';
 import apiClient from '../api/client';
 import { useTerminal } from '../contexts/TerminalContext';
 import { toast } from 'react-hot-toast';
@@ -170,13 +171,15 @@ const ManualSelections = () => {
     <div className="space-y-6">
       <div className="flex justify-between items-center">
         <h1 className="text-2xl font-bold text-gray-900">Manual Route Selection Entry</h1>
-        <a
-          href={`/print-forms?periodId=${selectedPeriod}&terminalId=${selectedTerminal?.id}`}
-          className="inline-flex items-center px-4 py-2 bg-gray-100 hover:bg-gray-200 text-gray-700 rounded-lg transition-colors"
-        >
-          <FileText className="w-4 h-4 mr-2" />
-          Print Blank Forms
-        </a>
+        {selectedPeriod && selectedTerminal && (
+          <Link
+            to={`/print-forms?periodId=${selectedPeriod}&terminalId=${selectedTerminal.id}`}
+            className="inline-flex items-center px-4 py-2 bg-gray-100 hover:bg-gray-200 text-gray-700 rounded-lg transition-colors"
+          >
+            <FileText className="w-4 h-4 mr-2" />
+            Print Blank Forms
+          </Link>
+        )}
       </div>
 
       {/* Selection Period Filter */}

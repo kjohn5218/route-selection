@@ -1,9 +1,11 @@
-import { useEffect } from 'react';
+import { useEffect, useState } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import { useQuery } from '@tanstack/react-query';
 import apiClient from '../api/client';
+import { useTerminal } from '../contexts/TerminalContext';
 import { format } from 'date-fns';
-import { Printer } from 'lucide-react';
+import { Printer, ArrowLeft } from 'lucide-react';
+import { useNavigate } from 'react-router-dom';
 
 interface Route {
   id: string;
@@ -29,6 +31,8 @@ interface SelectionPeriod {
   startDate: string;
   endDate: string;
   requiredSelections: number;
+  status: string;
+  terminalId: string;
 }
 
 interface Terminal {
@@ -38,49 +42,172 @@ interface Terminal {
 }
 
 const PrintForms = () => {
-  const [searchParams] = useSearchParams();
+  const [searchParams, setSearchParams] = useSearchParams();
+  const navigate = useNavigate();
+  const { selectedTerminal } = useTerminal();
+  
   const periodId = searchParams.get('periodId');
   const terminalId = searchParams.get('terminalId');
+  
+  const [selectedPeriodId, setSelectedPeriodId] = useState(periodId || '');
+  const [selectedTerminalId, setSelectedTerminalId] = useState(terminalId || selectedTerminal?.id || '');
+
+  // Fetch available periods for selection
+  const { data: periods = [] } = useQuery<SelectionPeriod[]>({
+    queryKey: ['selection-periods', selectedTerminalId],
+    queryFn: async () => {
+      if (!selectedTerminalId) return [];
+      const response = await apiClient.get('/periods', {
+        params: { terminalId: selectedTerminalId }
+      });
+      return response.data;
+    },
+    enabled: !!selectedTerminalId && !periodId,
+  });
+
+  // Fetch terminals if not provided
+  const { data: terminals = [] } = useQuery<Terminal[]>({
+    queryKey: ['terminals'],
+    queryFn: async () => {
+      const response = await apiClient.get('/terminals');
+      return response.data;
+    },
+    enabled: !terminalId,
+  });
+
+  // Set selected terminal ID when terminal context changes
+  useEffect(() => {
+    if (!terminalId && selectedTerminal?.id && !selectedTerminalId) {
+      setSelectedTerminalId(selectedTerminal.id);
+    }
+  }, [selectedTerminal, terminalId, selectedTerminalId]);
 
   // Fetch data
   const { data: period, isLoading: periodLoading, error: periodError } = useQuery<SelectionPeriod>({
-    queryKey: ['selection-period', periodId],
+    queryKey: ['selection-period', selectedPeriodId],
     queryFn: async () => {
-      if (!periodId) throw new Error('Period ID required');
-      const response = await apiClient.get(`/periods/${periodId}`);
+      if (!selectedPeriodId) throw new Error('Period ID required');
+      const response = await apiClient.get(`/periods/${selectedPeriodId}`);
       return response.data;
     },
-    enabled: !!periodId,
+    enabled: !!selectedPeriodId,
   });
 
   const { data: terminal, isLoading: terminalLoading, error: terminalError } = useQuery<Terminal>({
-    queryKey: ['terminal', terminalId],
+    queryKey: ['terminal', selectedTerminalId],
     queryFn: async () => {
-      if (!terminalId) throw new Error('Terminal ID required');
-      const response = await apiClient.get(`/terminals/${terminalId}`);
+      if (!selectedTerminalId) throw new Error('Terminal ID required');
+      const response = await apiClient.get(`/terminals/${selectedTerminalId}`);
       return response.data;
     },
-    enabled: !!terminalId,
+    enabled: !!selectedTerminalId,
   });
 
   const { data: routes = [], isLoading: routesLoading, error: routesError } = useQuery<Route[]>({
-    queryKey: ['period-routes', periodId],
+    queryKey: ['period-routes', selectedPeriodId],
     queryFn: async () => {
-      if (!periodId) return [];
-      const response = await apiClient.get(`/periods/${periodId}/routes`);
+      if (!selectedPeriodId) return [];
+      const response = await apiClient.get(`/periods/${selectedPeriodId}/routes`);
       return response.data;
     },
-    enabled: !!periodId,
+    enabled: !!selectedPeriodId,
   });
+
+  // Update URL when selections change
+  const handleSelectionChange = () => {
+    if (selectedPeriodId && selectedTerminalId) {
+      setSearchParams({ periodId: selectedPeriodId, terminalId: selectedTerminalId });
+    }
+  };
 
   // Auto-print on load
   useEffect(() => {
-    if (period && terminal && routes.length > 0) {
+    if (period && terminal && routes.length > 0 && periodId && terminalId) {
       setTimeout(() => {
         window.print();
       }, 500);
     }
-  }, [period, terminal, routes]);
+  }, [period, terminal, routes, periodId, terminalId]);
+
+  // Show selection form if no parameters provided
+  if (!selectedPeriodId || !selectedTerminalId) {
+    return (
+      <div className="max-w-2xl mx-auto p-8">
+        <div className="mb-6">
+          <button
+            onClick={() => navigate(-1)}
+            className="inline-flex items-center px-4 py-2 text-gray-600 hover:text-gray-900"
+          >
+            <ArrowLeft className="w-4 h-4 mr-2" />
+            Back
+          </button>
+        </div>
+
+        <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6">
+          <h1 className="text-2xl font-bold text-gray-900 mb-6">Print Route Selection Form</h1>
+          
+          <div className="space-y-4">
+            {/* Terminal Selection */}
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">
+                Select Terminal
+              </label>
+              {selectedTerminal && !terminalId ? (
+                <input
+                  type="text"
+                  value={selectedTerminal.name}
+                  disabled
+                  className="w-full px-3 py-2 bg-gray-100 border border-gray-300 rounded-lg text-gray-600"
+                />
+              ) : (
+                <select
+                  value={selectedTerminalId}
+                  onChange={(e) => {
+                    setSelectedTerminalId(e.target.value);
+                    setSelectedPeriodId(''); // Reset period when terminal changes
+                  }}
+                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary-500"
+                >
+                  <option value="">Select a terminal</option>
+                  {terminals.map(t => (
+                    <option key={t.id} value={t.id}>{t.name}</option>
+                  ))}
+                </select>
+              )}
+            </div>
+
+            {/* Period Selection */}
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">
+                Select Selection Period
+              </label>
+              <select
+                value={selectedPeriodId}
+                onChange={(e) => setSelectedPeriodId(e.target.value)}
+                disabled={!selectedTerminalId}
+                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary-500 disabled:bg-gray-100"
+              >
+                <option value="">Select a period</option>
+                {periods.map(p => (
+                  <option key={p.id} value={p.id}>
+                    {p.name} ({p.status})
+                  </option>
+                ))}
+              </select>
+            </div>
+
+            <button
+              onClick={handleSelectionChange}
+              disabled={!selectedPeriodId || !selectedTerminalId}
+              className="w-full mt-6 px-4 py-2 bg-primary-600 text-white rounded-lg hover:bg-primary-700 disabled:bg-gray-300 disabled:cursor-not-allowed transition-colors"
+            >
+              Load Print Form
+            </button>
+          </div>
+        </div>
+      </div>
+    );
+  }
 
   // Show loading state
   if (periodLoading || terminalLoading || routesLoading) {
@@ -120,17 +247,28 @@ const PrintForms = () => {
       <div className="flex items-center justify-center min-h-screen">
         <div className="text-center">
           <p className="text-gray-600 mb-4">Missing required data</p>
-          <p className="text-sm text-gray-500">Period ID: {periodId || 'Not provided'}</p>
-          <p className="text-sm text-gray-500">Terminal ID: {terminalId || 'Not provided'}</p>
-          <p className="text-sm text-gray-500 mt-2">Period loaded: {period ? 'Yes' : 'No'}</p>
-          <p className="text-sm text-gray-500">Terminal loaded: {terminal ? 'Yes' : 'No'}</p>
+          <button
+            onClick={() => {
+              setSelectedPeriodId('');
+              setSelectedTerminalId('');
+              setSearchParams({});
+            }}
+            className="px-4 py-2 bg-primary-600 text-white rounded hover:bg-primary-700"
+          >
+            Start Over
+          </button>
         </div>
       </div>
     );
   }
 
   const sortedRoutes = routes
-    .sort((a, b) => a.runNumber.localeCompare(b.runNumber));
+    .sort((a, b) => {
+      // Extract numeric part for proper numeric sorting
+      const aNum = parseInt(a.runNumber.replace(/\D/g, '')) || 0;
+      const bNum = parseInt(b.runNumber.replace(/\D/g, '')) || 0;
+      return aNum - bNum;
+    });
 
   // If no routes, show a message
   if (routes.length === 0) {
@@ -140,6 +278,16 @@ const PrintForms = () => {
           <p className="text-gray-600 mb-4">No routes available for this selection period</p>
           <p className="text-sm text-gray-500">Period: {period.name}</p>
           <p className="text-sm text-gray-500">Terminal: {terminal.name}</p>
+          <button
+            onClick={() => {
+              setSelectedPeriodId('');
+              setSelectedTerminalId('');
+              setSearchParams({});
+            }}
+            className="mt-4 px-4 py-2 bg-primary-600 text-white rounded hover:bg-primary-700"
+          >
+            Select Different Period
+          </button>
         </div>
       </div>
     );
@@ -147,15 +295,19 @@ const PrintForms = () => {
 
   return (
     <div className="print:m-0 print:p-0 p-8">
-      {/* Debug info - hidden when printing */}
-      <div className="print:hidden mb-4 p-4 bg-gray-100 rounded text-sm">
-        <p>Period: {period.name}</p>
-        <p>Terminal: {terminal.name}</p>
-        <p>Routes loaded: {routes.length}</p>
-      </div>
-
       {/* Print button - hidden when printing */}
-      <div className="print:hidden mb-6 flex justify-end">
+      <div className="print:hidden mb-6 flex justify-between">
+        <button
+          onClick={() => {
+            setSelectedPeriodId('');
+            setSelectedTerminalId('');
+            setSearchParams({});
+          }}
+          className="inline-flex items-center px-4 py-2 text-gray-600 hover:text-gray-900"
+        >
+          <ArrowLeft className="w-4 h-4 mr-2" />
+          Back to Selection
+        </button>
         <button
           onClick={() => window.print()}
           className="inline-flex items-center px-4 py-2 bg-primary-600 hover:bg-primary-700 text-white rounded-lg transition-colors"
