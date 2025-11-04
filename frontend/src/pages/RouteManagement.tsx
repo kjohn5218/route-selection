@@ -437,7 +437,7 @@ const RouteManagement = () => {
                 <th className="text-left py-3 px-6 font-medium text-gray-900">Days</th>
                 <th className="text-left py-3 px-6 font-medium text-gray-900">Distance</th>
                 <th className="text-left py-3 px-6 font-medium text-gray-900">Work Time</th>
-                <th className="text-left py-3 px-6 font-medium text-gray-900">Requirements</th>
+                <th className="text-left py-3 px-6 font-medium text-gray-900">Rate Type</th>
                 <th className="text-left py-3 px-6 font-medium text-gray-900">Status</th>
                 {user?.role !== 'Driver' && (
                   <th className="text-left py-3 px-6 font-medium text-gray-900">Actions</th>
@@ -480,23 +480,11 @@ const RouteManagement = () => {
                     <span className="text-sm text-gray-900">{route.workTime}h ({route.rateType})</span>
                   </td>
                   <td className="py-4 px-6">
-                    <div className="flex flex-wrap gap-1">
-                      {route.requiresDoublesEndorsement && (
-                        <span className="inline-flex items-center px-2 py-1 rounded-full text-xs font-medium bg-yellow-100 text-yellow-800">
-                          Doubles
-                        </span>
-                      )}
-                      {route.requiresChainExperience && (
-                        <span className="inline-flex items-center px-2 py-1 rounded-full text-xs font-medium bg-orange-100 text-orange-800">
-                          Chains
-                        </span>
-                      )}
-                      {!route.requiresDoublesEndorsement && !route.requiresChainExperience && (
-                        <span className="inline-flex items-center px-2 py-1 rounded-full text-xs font-medium bg-gray-100 text-gray-800">
-                          Standard
-                        </span>
-                      )}
-                    </div>
+                    <span className="text-sm text-gray-900">
+                      {route.rateType === 'HOURLY' && 'Hourly'}
+                      {route.rateType === 'MILEAGE' && 'Mileage'}
+                      {route.rateType === 'FLAT_RATE' && 'Flat Rate'}
+                    </span>
                   </td>
                   <td className="py-4 px-6">
                     <span className={`inline-flex items-center px-2 py-1 rounded-full text-xs font-medium ${

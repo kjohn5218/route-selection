@@ -4,8 +4,9 @@ import { useQuery } from '@tanstack/react-query';
 import apiClient from '../api/client';
 import { useTerminal } from '../contexts/TerminalContext';
 import { format } from 'date-fns';
-import { Printer, ArrowLeft } from 'lucide-react';
+import { Download, ArrowLeft } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
+import { generateRouteFormPDF } from '../utils/generateRouteFormPDF';
 
 interface Route {
   id: string;
@@ -18,9 +19,6 @@ interface Route {
   endTime: string;
   distance: number;
   rateType: string;
-  hourlyRate?: number;
-  mileageRate?: number;
-  flatRate?: number;
   requiresDoublesEndorsement: boolean;
   requiresChainExperience: boolean;
 }
@@ -45,6 +43,7 @@ const PrintForms = () => {
   const [searchParams, setSearchParams] = useSearchParams();
   const navigate = useNavigate();
   const { selectedTerminal } = useTerminal();
+  const [isGeneratingPDF, setIsGeneratingPDF] = useState(false);
   
   const periodId = searchParams.get('periodId');
   const terminalId = searchParams.get('terminalId');
@@ -120,11 +119,38 @@ const PrintForms = () => {
     }
   };
 
-  // Auto-print on load
+  // Generate PDF from the form
+  const generatePDF = () => {
+    if (!period || !terminal || !routes) return;
+
+    setIsGeneratingPDF(true);
+    try {
+      generateRouteFormPDF({
+        period: {
+          name: period.name,
+          startDate: period.startDate,
+          endDate: period.endDate,
+          requiredSelections: period.requiredSelections
+        },
+        terminal: {
+          code: terminal.code,
+          name: terminal.name
+        },
+        routes: routes
+      });
+    } catch (error) {
+      console.error('Error generating PDF:', error);
+      alert('Failed to generate PDF. Please try again.');
+    } finally {
+      setIsGeneratingPDF(false);
+    }
+  };
+
+  // Auto-generate PDF on load when parameters are provided
   useEffect(() => {
     if (period && terminal && routes.length > 0 && periodId && terminalId) {
       setTimeout(() => {
-        window.print();
+        generatePDF();
       }, 500);
     }
   }, [period, terminal, routes, periodId, terminalId]);
@@ -294,9 +320,9 @@ const PrintForms = () => {
   }
 
   return (
-    <div className="print:m-0 print:p-0 p-8">
-      {/* Print button - hidden when printing */}
-      <div className="print:hidden mb-6 flex justify-between">
+    <div className="p-8">
+      {/* Download button */}
+      <div className="mb-6 flex justify-between">
         <button
           onClick={() => {
             setSelectedPeriodId('');
@@ -309,15 +335,25 @@ const PrintForms = () => {
           Back to Selection
         </button>
         <button
-          onClick={() => window.print()}
-          className="inline-flex items-center px-4 py-2 bg-primary-600 hover:bg-primary-700 text-white rounded-lg transition-colors"
+          onClick={generatePDF}
+          disabled={isGeneratingPDF}
+          className="inline-flex items-center px-4 py-2 bg-primary-600 hover:bg-primary-700 text-white rounded-lg transition-colors disabled:opacity-50"
         >
-          <Printer className="w-4 h-4 mr-2" />
-          Print Form
+          {isGeneratingPDF ? (
+            <>
+              <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white mr-2"></div>
+              Generating PDF...
+            </>
+          ) : (
+            <>
+              <Download className="w-4 h-4 mr-2" />
+              Download PDF
+            </>
+          )}
         </button>
       </div>
 
-      <div className="printable-form bg-white text-black p-8 max-w-4xl mx-auto print:max-w-none print:m-0 print:p-0">
+      <div className="printable-form bg-white text-black p-8 max-w-4xl mx-auto">
         {/* Header */}
         <div className="text-center mb-8 border-b-2 border-black pb-4">
           <h1 className="text-2xl font-bold mb-2">ROUTE SELECTION FORM</h1>
@@ -353,8 +389,7 @@ const PrintForms = () => {
                 <th className="border border-black p-2 text-left">Days</th>
                 <th className="border border-black p-2 text-left">Time</th>
                 <th className="border border-black p-2 text-left">Miles</th>
-                <th className="border border-black p-2 text-left">Rate</th>
-                <th className="border border-black p-2 text-left">Requirements</th>
+                <th className="border border-black p-2 text-left">Rate Type</th>
               </tr>
             </thead>
             <tbody>
@@ -371,14 +406,9 @@ const PrintForms = () => {
                   </td>
                   <td className="border border-black p-2">{route.distance}</td>
                   <td className="border border-black p-2">
-                    {route.rateType === 'Hourly' && `$${route.hourlyRate}/hr`}
-                    {route.rateType === 'Mileage' && `$${route.mileageRate}/mi`}
-                    {route.rateType === 'FlatRate' && `$${route.flatRate}`}
-                  </td>
-                  <td className="border border-black p-2 text-xs">
-                    {route.requiresDoublesEndorsement && 'Doubles'}
-                    {route.requiresDoublesEndorsement && route.requiresChainExperience && ', '}
-                    {route.requiresChainExperience && 'Chains'}
+                    {route.rateType === 'HOURLY' && 'Hourly'}
+                    {route.rateType === 'MILEAGE' && 'Mileage'}
+                    {route.rateType === 'FLAT_RATE' && 'Flat Rate'}
                   </td>
                 </tr>
               ))}
@@ -386,29 +416,31 @@ const PrintForms = () => {
           </table>
         </div>
 
-        {/* Driver Selection Section - Force page break before */}
-        <div className="break-before-page print:break-before-page">
+        {/* Driver Selection Section - Force page break before for PDF */}
+        <div style={{ pageBreakBefore: 'always' }}>
           <h3 className="font-bold text-lg mb-4">DRIVER SELECTION:</h3>
           
           {/* Driver Information */}
           <div className="border border-black p-4 mb-4">
-            <h4 className="font-bold mb-3">Driver Information:</h4>
-            <div className="grid grid-cols-2 gap-4">
-              <div className="mb-3">
-                <span className="inline-block w-24">Full Name:</span>
-                <span className="inline-block border-b border-black w-64"></span>
+            <h4 className="font-bold mb-4">Driver Information:</h4>
+            <div className="space-y-4">
+              <div className="flex items-end">
+                <span className="inline-block w-24 mr-2">Full Name:</span>
+                <span className="inline-block border-b border-black flex-1"></span>
               </div>
-              <div className="mb-3">
-                <span className="inline-block w-32">Employee Number:</span>
-                <span className="inline-block border-b border-black w-48"></span>
+              <div className="grid grid-cols-2 gap-4">
+                <div className="flex items-end">
+                  <span className="inline-block mr-2">Employee Number:</span>
+                  <span className="inline-block border-b border-black flex-1"></span>
+                </div>
+                <div className="flex items-end">
+                  <span className="inline-block w-16 mr-2">Phone:</span>
+                  <span className="inline-block border-b border-black flex-1"></span>
+                </div>
               </div>
-              <div className="mb-3">
-                <span className="inline-block w-24">Email:</span>
-                <span className="inline-block border-b border-black w-64"></span>
-              </div>
-              <div className="mb-3">
-                <span className="inline-block w-24">Phone:</span>
-                <span className="inline-block border-b border-black w-48"></span>
+              <div className="flex items-end">
+                <span className="inline-block w-16 mr-2">Email:</span>
+                <span className="inline-block border-b border-black flex-1"></span>
               </div>
             </div>
           </div>
@@ -433,14 +465,12 @@ const PrintForms = () => {
               I certify that the route selections above are my preferred choices and that all information 
               provided is accurate. I understand that routes will be assigned based on seniority and availability.
             </p>
-            <div className="grid grid-cols-2 gap-8 mt-8">
-              <div>
-                <span className="inline-block w-32">Driver Signature:</span>
-                <span className="inline-block border-b border-black w-64"></span>
-              </div>
-              <div>
-                <span className="inline-block w-16">Date:</span>
-                <span className="inline-block border-b border-black w-48"></span>
+            <div className="mt-8 space-y-4">
+              <div className="flex items-end">
+                <span className="inline-block mr-2">Driver Signature:</span>
+                <span className="inline-block border-b border-black flex-1 mr-8"></span>
+                <span className="inline-block mr-2">Date:</span>
+                <span className="inline-block border-b border-black w-32"></span>
               </div>
             </div>
           </div>
@@ -470,22 +500,6 @@ const PrintForms = () => {
         </div>
       </div>
 
-      <style>{`
-        @media print {
-          @page {
-            margin: 0.5in;
-          }
-          
-          .break-before-page {
-            page-break-before: always;
-          }
-          
-          body {
-            margin: 0;
-            padding: 0;
-          }
-        }
-      `}</style>
     </div>
   );
 };
