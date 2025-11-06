@@ -154,10 +154,25 @@ const Selections = () => {
                     </div>
                     
                     <Link
-                      to={`/periods/${period.id}/manage`}
+                      to={
+                        user?.role === 'Driver' 
+                          ? period.status === 'COMPLETED' 
+                            ? `/driver-results/${period.id}` 
+                            : period.status === 'OPEN' && isActive
+                              ? `/submit-selection/${period.id}`
+                              : `/periods/${period.id}/manage`
+                          : `/periods/${period.id}/manage`
+                      }
                       className="inline-flex items-center gap-2 px-4 py-2 bg-primary-600 hover:bg-primary-700 text-white font-medium rounded-lg transition-colors"
                     >
-                      Manage Period
+                      {user?.role === 'Driver' 
+                        ? period.status === 'COMPLETED' 
+                          ? 'View My Result' 
+                          : period.status === 'OPEN' && isActive
+                            ? 'Submit Selection'
+                            : 'View Details'
+                        : 'Manage Period'
+                      }
                       <ChevronRight className="w-4 h-4" />
                     </Link>
                   </div>

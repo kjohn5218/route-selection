@@ -119,6 +119,28 @@ router.get('/', authenticateToken, checkTerminalAccess, async (req: TerminalAcce
   }
 });
 
+// GET /api/routes/period/:periodId - Get all routes for a selection period (for drivers)
+router.get('/period/:periodId', authenticateToken, async (req: Request, res: Response) => {
+  try {
+    const { periodId } = req.params;
+
+    // Get routes that are part of this selection period
+    const periodRoutes = await prisma.periodRoute.findMany({
+      where: { selectionPeriodId: periodId },
+      include: {
+        route: true,
+      },
+    });
+
+    const routes = periodRoutes.map(pr => pr.route).filter(r => r.isActive);
+
+    res.json(routes);
+  } catch (error) {
+    console.error('Get period routes error:', error);
+    res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
 // GET /api/routes/available/:selectionPeriodId - Get available routes for selection period
 router.get('/available/:selectionPeriodId', authenticateToken, async (req: Request, res: Response) => {
   try {

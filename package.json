@@ -18,7 +18,9 @@
     "db:backup": "tsx scripts/backup-db.ts",
     "db:restore": "tsx scripts/restore-db.ts",
     "db:clear": "tsx scripts/clear-db.ts",
-    "db:seed-terminals": "tsx scripts/seed-terminals.ts"
+    "db:seed-terminals": "tsx scripts/seed-terminals.ts",
+    "db:clear-periods": "tsx scripts/clear-selection-periods.ts",
+    "db:open-periods": "tsx scripts/open-active-periods.ts"
   },
   "keywords": [
     "route",

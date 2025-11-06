@@ -20,6 +20,8 @@ import ManualSelections from './pages/ManualSelections';
 import PrintForms from './pages/PrintForms';
 import ProcessSelections from './pages/ProcessSelections';
 import SelectionResults from './pages/SelectionResults';
+import DriverSelectionResults from './pages/DriverSelectionResults';
+import DriverSelectionForm from './pages/DriverSelectionForm';
 
 const queryClient = new QueryClient({
   defaultOptions: {
@@ -62,6 +64,8 @@ function App() {
               <Route path="print-forms" element={<PrintForms />} />
               <Route path="process-selections/:periodId" element={<ProcessSelections />} />
               <Route path="selection-results/:periodId" element={<SelectionResults />} />
+              <Route path="driver-results/:periodId" element={<DriverSelectionResults />} />
+              <Route path="submit-selection/:periodId" element={<DriverSelectionForm />} />
             </Route>
           </Routes>
           </TerminalProvider>

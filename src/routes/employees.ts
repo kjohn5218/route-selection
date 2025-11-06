@@ -189,6 +189,42 @@ router.get('/seniority', authenticateToken, requireAdmin, async (req: Request, r
   }
 });
 
+// GET /api/employees/by-user/:userId - Get employee by user ID (for logged-in drivers)
+router.get('/by-user/:userId', authenticateToken, async (req: Request, res: Response) => {
+  try {
+    const employee = await prisma.employee.findFirst({
+      where: { 
+        user: { 
+          id: req.params.userId 
+        }
+      },
+      include: {
+        user: {
+          select: {
+            id: true,
+            email: true,
+            role: true,
+          },
+        },
+      },
+    });
+
+    if (!employee) {
+      return res.status(404).json({ error: 'Employee not found for this user' });
+    }
+
+    // If driver, only allow access to their own data
+    if (req.user.role === 'DRIVER' && req.user.id !== req.params.userId) {
+      return res.status(403).json({ error: 'Access denied' });
+    }
+
+    res.json(employee);
+  } catch (error: any) {
+    console.error('Get employee by user error:', error);
+    res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
 // GET /api/employees/:id - Get single employee
 router.get('/:id', authenticateToken, requireAdminOrSelf, async (req: Request, res: Response) => {
   try {

@@ -3,6 +3,7 @@ import { z } from 'zod';
 import prisma from '../utils/database.js';
 import { authenticateToken, requireAdmin } from '../middleware/auth.js';
 import emailService from '../services/email.js';
+import { updatePeriodStatusMiddleware } from '../middleware/updatePeriodStatus.js';
 
 const router = Router();
 
@@ -27,7 +28,7 @@ const updatePeriodSchema = z.object({
 });
 
 // GET /api/periods - Get all selection periods
-router.get('/', authenticateToken, async (req: Request, res: Response) => {
+router.get('/', authenticateToken, updatePeriodStatusMiddleware, async (req: Request, res: Response) => {
   try {
     const { terminalId } = req.query;
     
