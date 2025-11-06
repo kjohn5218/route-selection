@@ -22,6 +22,7 @@ import ProcessSelections from './pages/ProcessSelections';
 import SelectionResults from './pages/SelectionResults';
 import DriverSelectionResults from './pages/DriverSelectionResults';
 import DriverSelectionForm from './pages/DriverSelectionForm';
+import RouteSelectionGuidelines from './pages/RouteSelectionGuidelines';
 
 const queryClient = new QueryClient({
   defaultOptions: {
@@ -66,6 +67,7 @@ function App() {
               <Route path="selection-results/:periodId" element={<SelectionResults />} />
               <Route path="driver-results/:periodId" element={<DriverSelectionResults />} />
               <Route path="submit-selection/:periodId" element={<DriverSelectionForm />} />
+              <Route path="guidelines" element={<RouteSelectionGuidelines />} />
             </Route>
           </Routes>
           </TerminalProvider>

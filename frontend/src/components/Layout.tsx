@@ -17,7 +17,8 @@ import {
   UserCircle,
   Building2,
   ClipboardList,
-  FileText
+  FileText,
+  BookOpen
 } from 'lucide-react';
 import { useState } from 'react';
 
@@ -37,6 +38,7 @@ const Layout = () => {
 
   const menuItems = [
     { path: '/dashboard', label: 'Dashboard', icon: Home },
+    { path: '/guidelines', label: 'Selection Guidelines', icon: BookOpen },
     { path: '/employees', label: 'Employees', icon: Users, roles: ['Admin', 'Manager'] },
     { path: '/routes', label: 'Routes', icon: Route, roles: ['Admin', 'Manager'] },
     { path: '/periods', label: 'Selection Periods', icon: Calendar, roles: ['Admin', 'Manager'] },
