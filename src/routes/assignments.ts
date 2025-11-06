@@ -492,6 +492,9 @@ router.post('/notify/:periodId', authenticateToken, requireAdmin, async (req: Re
 
     const period = await prisma.selectionPeriod.findUnique({
       where: { id: periodId },
+      include: {
+        terminal: true,
+      },
     });
 
     if (!period) {
@@ -512,6 +515,9 @@ router.post('/notify/:periodId', authenticateToken, requireAdmin, async (req: Re
           include: {
             user: {
               select: { email: true },
+            },
+            terminal: {
+              select: { name: true },
             },
           },
         },
@@ -541,10 +547,13 @@ router.post('/notify/:periodId', authenticateToken, requireAdmin, async (req: Re
           `${assignment.employee.firstName} ${assignment.employee.lastName}`,
           {
             routeNumber: assignment.route?.runNumber || 'Float Pool',
-            origin: assignment.route?.origin || 'Various',
+            origin: assignment.route?.origin || assignment.employee.terminal.name,
             destination: assignment.route?.destination || 'Various',
             choiceReceived: assignment.choiceReceived,
             periodName: period.name,
+            days: assignment.route?.days || 'As Needed',
+            startTime: assignment.route?.startTime || 'Variable',
+            endTime: assignment.route?.endTime || 'Variable',
           }
         ).then(() => {
           successCount++;

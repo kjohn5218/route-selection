@@ -36,6 +36,7 @@ interface SelectionPeriod {
   _count?: {
     selections: number;
   };
+  routeCount?: number;
 }
 
 interface PeriodFormData {
@@ -58,6 +59,9 @@ const Periods = () => {
   const [selectedPeriod, setSelectedPeriod] = useState<SelectionPeriod | null>(null);
   const [showDeleteModal, setShowDeleteModal] = useState(false);
   const [showNotifyModal, setShowNotifyModal] = useState(false);
+  const [showCloseConfirmModal, setShowCloseConfirmModal] = useState(false);
+  const [driversNotSubmitted, setDriversNotSubmitted] = useState<any[]>([]);
+  const [submissionStatus, setSubmissionStatus] = useState<any>(null);
   const [statusFilter, setStatusFilter] = useState<'all' | 'UPCOMING' | 'OPEN' | 'CLOSED' | 'PROCESSING' | 'COMPLETED'>('all');
   const [formData, setFormData] = useState<PeriodFormData>({
     name: '',
@@ -210,8 +214,31 @@ const Periods = () => {
     }
   };
 
-  const handleStatusChange = (period: SelectionPeriod, newStatus: string) => {
-    updateStatusMutation.mutate({ periodId: period.id, status: newStatus });
+  const handleStatusChange = async (period: SelectionPeriod, newStatus: string) => {
+    // If closing an OPEN period, check for non-submitted drivers
+    if (period.status === 'OPEN' && newStatus === 'CLOSED') {
+      try {
+        const response = await apiClient.get(`/periods/${period.id}/submission-status`);
+        const data = response.data;
+        
+        if (data.totalNotSubmitted > 0) {
+          // Show confirmation dialog with list of drivers who haven't submitted
+          setSelectedPeriod(period);
+          setSubmissionStatus(data);
+          setDriversNotSubmitted(data.employeesNotSubmitted);
+          setShowCloseConfirmModal(true);
+        } else {
+          // All drivers have submitted, proceed with closing
+          updateStatusMutation.mutate({ periodId: period.id, status: newStatus });
+        }
+      } catch (error) {
+        console.error('Error fetching submission status:', error);
+        alert('Failed to check submission status');
+      }
+    } else {
+      // For other status changes, proceed normally
+      updateStatusMutation.mutate({ periodId: period.id, status: newStatus });
+    }
   };
 
   const resetForm = () => {
@@ -537,6 +564,15 @@ const Periods = () => {
                     </button>
                   )}
                   <div className="flex-1" />
+                  {period.status === 'OPEN' && (
+                    <button
+                      onClick={() => navigate(`/periods/${period.id}/manage`)}
+                      className="p-2 text-gray-500 hover:text-green-600 hover:bg-green-50 rounded-lg transition-all"
+                      title="View submissions"
+                    >
+                      <Users className="w-4 h-4" />
+                    </button>
+                  )}
                   {(period.status === 'CLOSED' || period.status === 'PROCESSING' || period.status === 'COMPLETED') && (
                     <button
                       onClick={() => navigate(`/periods/${period.id}/manage`)}
@@ -1042,6 +1078,118 @@ const Periods = () => {
                   {notifyDriversMutation.isPending ? 'Sending...' : 'Send Notifications'}
                 </button>
               </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Close Period Confirmation Modal */}
+      {showCloseConfirmModal && selectedPeriod && submissionStatus && (
+        <div className="fixed inset-0 bg-black/50 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+          <div className="bg-white rounded-xl max-w-2xl w-full max-h-[90vh] overflow-hidden animate-slide-up">
+            <div className="flex items-center justify-between p-6 border-b">
+              <h3 className="text-lg font-semibold text-gray-900">Confirm Close Selection Period</h3>
+              <button
+                onClick={() => {
+                  setShowCloseConfirmModal(false);
+                  setSelectedPeriod(null);
+                  setDriversNotSubmitted([]);
+                  setSubmissionStatus(null);
+                }}
+                className="text-gray-400 hover:text-gray-600"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            <div className="p-6 max-h-[calc(90vh-200px)] overflow-y-auto">
+              <div className="mb-4">
+                <div className="bg-yellow-50 p-4 rounded-lg mb-4">
+                  <div className="flex items-start gap-3">
+                    <AlertCircle className="w-5 h-5 text-yellow-600 flex-shrink-0 mt-0.5" />
+                    <div className="text-sm text-yellow-800">
+                      <p className="font-medium mb-1">Warning: Not all drivers have submitted their selections</p>
+                      <p>{submissionStatus.totalNotSubmitted} out of {submissionStatus.totalEligible} eligible drivers have not submitted their route selections.</p>
+                    </div>
+                  </div>
+                </div>
+
+                <div className="grid grid-cols-3 gap-4 mb-6">
+                  <div className="text-center">
+                    <p className="text-2xl font-bold text-gray-900">{submissionStatus.totalEligible}</p>
+                    <p className="text-sm text-gray-600">Total Eligible</p>
+                  </div>
+                  <div className="text-center">
+                    <p className="text-2xl font-bold text-green-600">{submissionStatus.totalSubmitted}</p>
+                    <p className="text-sm text-gray-600">Submitted</p>
+                  </div>
+                  <div className="text-center">
+                    <p className="text-2xl font-bold text-red-600">{submissionStatus.totalNotSubmitted}</p>
+                    <p className="text-sm text-gray-600">Not Submitted</p>
+                  </div>
+                </div>
+
+                {driversNotSubmitted.length > 0 && (
+                  <>
+                    <h4 className="font-medium text-gray-900 mb-3">Drivers who have not submitted:</h4>
+                    <div className="border rounded-lg divide-y divide-gray-200 max-h-64 overflow-y-auto">
+                      {driversNotSubmitted.map((driver) => (
+                        <div key={driver.id} className="p-3 hover:bg-gray-50">
+                          <div className="flex items-center justify-between">
+                            <div>
+                              <p className="font-medium text-gray-900">
+                                {driver.firstName} {driver.lastName}
+                              </p>
+                              <p className="text-sm text-gray-600">
+                                Employee ID: {driver.employeeId} • Hire Date: {new Date(driver.hireDate).toLocaleDateString()}
+                              </p>
+                            </div>
+                            <div className="text-sm text-gray-500">
+                              {driver.email || 'No email'}
+                            </div>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  </>
+                )}
+
+                <div className="mt-6 p-4 bg-gray-50 rounded-lg">
+                  <p className="text-sm text-gray-700">
+                    <strong>Note:</strong> Closing this period will prevent these drivers from making their selections. 
+                    They will be assigned to the float pool during route assignment processing.
+                  </p>
+                </div>
+              </div>
+            </div>
+
+            <div className="flex gap-3 justify-end p-6 border-t">
+              <button
+                onClick={() => {
+                  setShowCloseConfirmModal(false);
+                  setSelectedPeriod(null);
+                  setDriversNotSubmitted([]);
+                  setSubmissionStatus(null);
+                }}
+                className="btn-secondary"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={() => {
+                  if (selectedPeriod) {
+                    updateStatusMutation.mutate({ periodId: selectedPeriod.id, status: 'CLOSED' });
+                    setShowCloseConfirmModal(false);
+                    setSelectedPeriod(null);
+                    setDriversNotSubmitted([]);
+                    setSubmissionStatus(null);
+                  }
+                }}
+                disabled={updateStatusMutation.isPending}
+                className="btn-primary"
+              >
+                {updateStatusMutation.isPending ? 'Closing...' : 'Close Period Anyway'}
+              </button>
             </div>
           </div>
         </div>

@@ -99,6 +99,8 @@ const SelectionManagement = () => {
   const [showProcessModal, setShowProcessModal] = useState(false);
   const [showResultsModal, setShowResultsModal] = useState(false);
   const [processingResults, setProcessingResults] = useState<any>(null);
+  const [showSubmissionStatus, setShowSubmissionStatus] = useState(false);
+  const [submissionStatus, setSubmissionStatus] = useState<any>(null);
 
   // Fetch period details
   const { data: period, isLoading, error } = useQuery<PeriodDetails>({
@@ -108,6 +110,18 @@ const SelectionManagement = () => {
       return response.data;
     },
   });
+
+  // Fetch submission status
+  const fetchSubmissionStatus = async () => {
+    try {
+      const response = await apiClient.get(`/periods/${periodId}/submission-status`);
+      setSubmissionStatus(response.data);
+      setShowSubmissionStatus(true);
+    } catch (error) {
+      console.error('Error fetching submission status:', error);
+      alert('Failed to fetch submission status');
+    }
+  };
 
   // Process selections mutation
   const processSelectionsMutation = useMutation({
@@ -242,24 +256,35 @@ const SelectionManagement = () => {
             Manage selections and process route assignments
           </p>
         </div>
-        {period.status === 'CLOSED' && (
-          <button
-            onClick={() => setShowProcessModal(true)}
-            className="btn-primary flex items-center gap-2"
-          >
-            <Award className="w-4 h-4" />
-            Process Assignments
-          </button>
-        )}
-        {period.status === 'COMPLETED' && (
-          <button
-            onClick={() => navigate(`/selection-results/${periodId}`)}
-            className="btn-primary flex items-center gap-2"
-          >
-            <FileText className="w-4 h-4" />
-            View Results
-          </button>
-        )}
+        <div className="flex items-center gap-3">
+          {period.status === 'OPEN' && (
+            <button
+              onClick={() => fetchSubmissionStatus()}
+              className="btn-secondary flex items-center gap-2"
+            >
+              <Users className="w-4 h-4" />
+              View Submission Status
+            </button>
+          )}
+          {period.status === 'CLOSED' && (
+            <button
+              onClick={() => setShowProcessModal(true)}
+              className="btn-primary flex items-center gap-2"
+            >
+              <Award className="w-4 h-4" />
+              Process Assignments
+            </button>
+          )}
+          {period.status === 'COMPLETED' && (
+            <button
+              onClick={() => navigate(`/selection-results/${periodId}`)}
+              className="btn-primary flex items-center gap-2"
+            >
+              <FileText className="w-4 h-4" />
+              View Results
+            </button>
+          )}
+        </div>
       </div>
 
       {/* Period Info */}
@@ -289,66 +314,111 @@ const SelectionManagement = () => {
       </div>
 
       {/* Statistics */}
-      {period.status === 'COMPLETED' && (
+      {(period.status === 'OPEN' || period.status === 'COMPLETED') && (
         <div className="grid grid-cols-1 md:grid-cols-6 gap-4">
-          <div className="card p-4">
-            <div className="flex items-center justify-between">
-              <div>
-                <p className="text-xs text-gray-600">Total Processed</p>
-                <p className="text-xl font-bold text-gray-900">{stats.processedAssignments}</p>
+          {period.status === 'OPEN' ? (
+            <>
+              <div className="card p-4">
+                <div className="flex items-center justify-between">
+                  <div>
+                    <p className="text-xs text-gray-600">Submissions</p>
+                    <p className="text-xl font-bold text-gray-900">{period.selections.length}</p>
+                  </div>
+                  <Users className="w-8 h-8 text-gray-400" />
+                </div>
               </div>
-              <Users className="w-8 h-8 text-gray-400" />
-            </div>
-          </div>
-          <div className="card p-4">
-            <div className="flex items-center justify-between">
-              <div>
-                <p className="text-xs text-gray-600">1st Choice</p>
-                <p className="text-xl font-bold text-green-600">{stats.firstChoiceAwarded}</p>
+              <div className="card p-4 col-span-2">
+                <div className="flex items-center justify-between">
+                  <div className="flex-1">
+                    <p className="text-xs text-gray-600 mb-1">Period Progress</p>
+                    <div className="w-full bg-gray-200 rounded-full h-2">
+                      <div 
+                        className="bg-green-600 h-2 rounded-full transition-all duration-500"
+                        style={{ 
+                          width: `${Math.min(100, Math.max(0, 
+                            ((new Date().getTime() - new Date(period.startDate).getTime()) / 
+                            (new Date(period.endDate).getTime() - new Date(period.startDate).getTime())) * 100
+                          ))}%` 
+                        }}
+                      />
+                    </div>
+                  </div>
+                </div>
               </div>
-              <CheckCircle className="w-8 h-8 text-green-400" />
-            </div>
-          </div>
-          <div className="card p-4">
-            <div className="flex items-center justify-between">
-              <div>
-                <p className="text-xs text-gray-600">2nd Choice</p>
-                <p className="text-xl font-bold text-yellow-600">{stats.secondChoiceAwarded}</p>
+              <div className="card p-4">
+                <div className="flex items-center justify-between">
+                  <div>
+                    <p className="text-xs text-gray-600">Days Left</p>
+                    <p className="text-xl font-bold text-gray-900">
+                      {Math.max(0, Math.ceil((new Date(period.endDate).getTime() - new Date().getTime()) / (1000 * 60 * 60 * 24)))}
+                    </p>
+                  </div>
+                  <Clock className="w-8 h-8 text-gray-400" />
+                </div>
               </div>
-              <Clock className="w-8 h-8 text-yellow-400" />
-            </div>
-          </div>
-          <div className="card p-4">
-            <div className="flex items-center justify-between">
-              <div>
-                <p className="text-xs text-gray-600">3rd Choice</p>
-                <p className="text-xl font-bold text-orange-600">{stats.thirdChoiceAwarded}</p>
+            </>
+          ) : (
+            <>
+              <div className="card p-4">
+                <div className="flex items-center justify-between">
+                  <div>
+                    <p className="text-xs text-gray-600">Total Processed</p>
+                    <p className="text-xl font-bold text-gray-900">{stats.processedAssignments}</p>
+                  </div>
+                  <Users className="w-8 h-8 text-gray-400" />
+                </div>
               </div>
-              <AlertTriangle className="w-8 h-8 text-orange-400" />
-            </div>
-          </div>
-          <div className="card p-4">
-            <div className="flex items-center justify-between">
-              <div>
-                <p className="text-xs text-gray-600">Float Pool</p>
-                <p className="text-xl font-bold text-gray-600">{stats.floatPool}</p>
+              <div className="card p-4">
+                <div className="flex items-center justify-between">
+                  <div>
+                    <p className="text-xs text-gray-600">1st Choice</p>
+                    <p className="text-xl font-bold text-green-600">{stats.firstChoiceAwarded}</p>
+                  </div>
+                  <CheckCircle className="w-8 h-8 text-green-400" />
+                </div>
               </div>
-              <XCircle className="w-8 h-8 text-gray-400" />
-            </div>
-          </div>
-          <div className="card p-4">
-            <div className="flex items-center justify-between">
-              <div>
-                <p className="text-xs text-gray-600">Success Rate</p>
-                <p className="text-xl font-bold text-primary-600">
-                  {stats.processedAssignments > 0 
-                    ? Math.round(((stats.firstChoiceAwarded + stats.secondChoiceAwarded + stats.thirdChoiceAwarded) / stats.processedAssignments) * 100)
-                    : 0}%
-                </p>
+              <div className="card p-4">
+                <div className="flex items-center justify-between">
+                  <div>
+                    <p className="text-xs text-gray-600">2nd Choice</p>
+                    <p className="text-xl font-bold text-yellow-600">{stats.secondChoiceAwarded}</p>
+                  </div>
+                  <Clock className="w-8 h-8 text-yellow-400" />
+                </div>
               </div>
-              <Award className="w-8 h-8 text-primary-400" />
-            </div>
-          </div>
+              <div className="card p-4">
+                <div className="flex items-center justify-between">
+                  <div>
+                    <p className="text-xs text-gray-600">3rd Choice</p>
+                    <p className="text-xl font-bold text-orange-600">{stats.thirdChoiceAwarded}</p>
+                  </div>
+                  <AlertTriangle className="w-8 h-8 text-orange-400" />
+                </div>
+              </div>
+              <div className="card p-4">
+                <div className="flex items-center justify-between">
+                  <div>
+                    <p className="text-xs text-gray-600">Float Pool</p>
+                    <p className="text-xl font-bold text-gray-600">{stats.floatPool}</p>
+                  </div>
+                  <XCircle className="w-8 h-8 text-gray-400" />
+                </div>
+              </div>
+              <div className="card p-4">
+                <div className="flex items-center justify-between">
+                  <div>
+                    <p className="text-xs text-gray-600">Success Rate</p>
+                    <p className="text-xl font-bold text-primary-600">
+                      {stats.processedAssignments > 0 
+                        ? Math.round(((stats.firstChoiceAwarded + stats.secondChoiceAwarded + stats.thirdChoiceAwarded) / stats.processedAssignments) * 100)
+                        : 0}%
+                    </p>
+                  </div>
+                  <Award className="w-8 h-8 text-primary-400" />
+                </div>
+              </div>
+            </>
+          )}
         </div>
       )}
 
@@ -692,6 +762,100 @@ const SelectionManagement = () => {
                   {notifyEmployeesMutation.isPending ? 'Sending...' : 'Notify Employees'}
                 </button>
               </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Submission Status Modal */}
+      {showSubmissionStatus && submissionStatus && (
+        <div className="fixed inset-0 bg-black/50 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+          <div className="bg-white rounded-xl max-w-2xl w-full max-h-[90vh] overflow-hidden animate-slide-up">
+            <div className="flex items-center justify-between p-6 border-b">
+              <h3 className="text-lg font-semibold text-gray-900">Submission Status</h3>
+              <button
+                onClick={() => {
+                  setShowSubmissionStatus(false);
+                  setSubmissionStatus(null);
+                }}
+                className="text-gray-400 hover:text-gray-600"
+              >
+                <XCircle className="w-5 h-5" />
+              </button>
+            </div>
+
+            <div className="p-6 max-h-[calc(90vh-200px)] overflow-y-auto">
+              <div className="grid grid-cols-3 gap-4 mb-6">
+                <div className="text-center">
+                  <p className="text-2xl font-bold text-gray-900">{submissionStatus.totalEligible}</p>
+                  <p className="text-sm text-gray-600">Total Eligible</p>
+                </div>
+                <div className="text-center">
+                  <p className="text-2xl font-bold text-green-600">{submissionStatus.totalSubmitted}</p>
+                  <p className="text-sm text-gray-600">Submitted</p>
+                </div>
+                <div className="text-center">
+                  <p className="text-2xl font-bold text-red-600">{submissionStatus.totalNotSubmitted}</p>
+                  <p className="text-sm text-gray-600">Not Submitted</p>
+                </div>
+              </div>
+
+              {submissionStatus.totalNotSubmitted > 0 ? (
+                <>
+                  <h4 className="font-medium text-gray-900 mb-3">Drivers who have not submitted ({submissionStatus.totalNotSubmitted}):</h4>
+                  <div className="border rounded-lg divide-y divide-gray-200 max-h-96 overflow-y-auto">
+                    {submissionStatus.employeesNotSubmitted.map((driver: any) => (
+                      <div key={driver.id} className="p-3 hover:bg-gray-50">
+                        <div className="flex items-center justify-between">
+                          <div>
+                            <p className="font-medium text-gray-900">
+                              {driver.firstName} {driver.lastName}
+                            </p>
+                            <p className="text-sm text-gray-600">
+                              Employee ID: {driver.employeeId} • Hire Date: {new Date(driver.hireDate).toLocaleDateString()}
+                            </p>
+                          </div>
+                          <div className="text-sm text-gray-500">
+                            {driver.email || 'No email'}
+                          </div>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </>
+              ) : (
+                <div className="text-center py-8">
+                  <CheckCircle className="w-12 h-12 text-green-500 mx-auto mb-4" />
+                  <h4 className="font-medium text-gray-900 mb-2">All Eligible Drivers Have Submitted</h4>
+                  <p className="text-gray-600">All {submissionStatus.totalEligible} eligible drivers have submitted their route selections.</p>
+                </div>
+              )}
+            </div>
+
+            <div className="flex gap-3 justify-end p-6 border-t">
+              <button
+                onClick={() => {
+                  setShowSubmissionStatus(false);
+                  setSubmissionStatus(null);
+                }}
+                className="btn-secondary"
+              >
+                Close
+              </button>
+              {submissionStatus.totalNotSubmitted > 0 && (
+                <button
+                  onClick={() => {
+                    if (confirm(`Send reminder emails to ${submissionStatus.totalNotSubmitted} drivers who haven't submitted?`)) {
+                      // You can implement a reminder email feature here
+                      alert('Reminder feature not yet implemented');
+                    }
+                  }}
+                  className="btn-primary flex items-center gap-2"
+                >
+                  <Send className="w-4 h-4" />
+                  Send Reminders
+                </button>
+              )}
             </div>
           </div>
         </div>

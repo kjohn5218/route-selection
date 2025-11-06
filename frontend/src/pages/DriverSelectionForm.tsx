@@ -19,6 +19,9 @@ interface Route {
   requiresDoublesEndorsement: boolean;
   requiresChainExperience: boolean;
   terminalId: string;
+  distance: number | null;
+  workTime: number | null;
+  rateType: string | null;
 }
 
 interface SelectionPeriod {
@@ -139,6 +142,21 @@ const DriverSelectionForm = () => {
     return true;
   };
 
+  // Format rate type for display
+  const formatRateType = (rateType: string | null): string => {
+    if (!rateType) return '';
+    switch (rateType) {
+      case 'HOURLY':
+        return 'Hourly';
+      case 'MILEAGE':
+        return 'Mileage';
+      case 'FLAT_RATE':
+        return 'Flat Rate';
+      default:
+        return rateType;
+    }
+  };
+
   // Filter routes based on search and qualifications
   const filteredRoutes = routes.filter(route => {
     const matchesSearch = searchTerm === '' || 
@@ -153,8 +171,6 @@ const DriverSelectionForm = () => {
 
   // Get available routes for each choice level
   const getAvailableRoutes = (choiceLevel: 1 | 2 | 3) => {
-    const selectedIds = [firstChoice, secondChoice, thirdChoice].filter(Boolean);
-    
     return filteredRoutes.filter(route => {
       // Don't show already selected routes
       if (choiceLevel === 2 && route.id === firstChoice) return false;
@@ -346,6 +362,13 @@ const DriverSelectionForm = () => {
                           Type: {route.type}
                           {route.estimatedHours && ` • ${route.estimatedHours} hours`}
                           {route.startTime && ` • Start: ${route.startTime}`}
+                        </div>
+                        <div className="text-sm text-gray-600 mt-1">
+                          {route.distance && `Distance: ${route.distance} mi`}
+                          {route.distance && route.workTime && ' • '}
+                          {route.workTime && `Work Time: ${route.workTime}h`}
+                          {(route.distance || route.workTime) && route.rateType && ' • '}
+                          {route.rateType && `Rate: ${formatRateType(route.rateType)}`}
                         </div>
                         {!qualified && (
                           <div className="text-xs text-red-600 mt-1">

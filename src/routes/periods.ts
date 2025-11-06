@@ -846,4 +846,92 @@ router.get('/:id/routes', authenticateToken, async (req: Request, res: Response)
   }
 });
 
+// GET /api/periods/:id/submission-status - Get drivers who haven't submitted selections
+router.get('/:id/submission-status', authenticateToken, requireAdmin, async (req: Request, res: Response) => {
+  try {
+    const { id } = req.params;
+
+    // Get the selection period with submissions
+    const period = await prisma.selectionPeriod.findUnique({
+      where: { id },
+      include: {
+        selections: {
+          select: {
+            employeeId: true,
+          },
+        },
+      },
+    });
+
+    if (!period) {
+      return res.status(404).json({ error: 'Selection period not found' });
+    }
+
+    // Get all eligible employees for this terminal
+    const allEligibleEmployees = await prisma.employee.findMany({
+      where: {
+        isEligible: true,
+        terminalId: period.terminalId,
+      },
+      include: {
+        user: {
+          select: {
+            email: true,
+          },
+        },
+      },
+    });
+
+    // Get IDs of employees who have submitted
+    const submittedEmployeeIds = period.selections.map(sel => sel.employeeId);
+
+    // Filter for employees who haven't submitted
+    const employeesNotSubmitted = allEligibleEmployees.filter(
+      emp => !submittedEmployeeIds.includes(emp.id)
+    );
+
+    // Format the response
+    const response = {
+      periodId: period.id,
+      periodName: period.name,
+      periodStatus: period.status,
+      totalEligible: allEligibleEmployees.length,
+      totalSubmitted: submittedEmployeeIds.length,
+      totalNotSubmitted: employeesNotSubmitted.length,
+      employeesNotSubmitted: employeesNotSubmitted.map(emp => ({
+        id: emp.id,
+        employeeId: emp.employeeId,
+        firstName: emp.firstName,
+        lastName: emp.lastName,
+        email: emp.user?.email || null,
+        hireDate: emp.hireDate,
+      })),
+    };
+
+    res.json(response);
+  } catch (error) {
+    console.error('Get submission status error:', error);
+    res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
+// POST /api/periods/test-reminders - Test reminder functionality (Admin only)
+router.post('/test-reminders', authenticateToken, requireAdmin, async (req: Request, res: Response) => {
+  try {
+    // Import scheduler service
+    const { default: schedulerService } = await import('../services/scheduler.js');
+    
+    // Manually trigger reminder check
+    await schedulerService.triggerReminderCheck();
+    
+    res.json({ 
+      success: true, 
+      message: 'Reminder check triggered. Check server logs for details.' 
+    });
+  } catch (error) {
+    console.error('Test reminders error:', error);
+    res.status(500).json({ error: 'Failed to trigger reminder check' });
+  }
+});
+
 export default router;

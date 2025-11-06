@@ -248,6 +248,9 @@ This is an automated message. Please do not reply to this email.
       destination: string;
       choiceReceived: number | null;
       periodName: string;
+      days?: string;
+      startTime?: string;
+      endTime?: string;
     }
   ): Promise<void> {
     const subject = `Route Assignment Notification - ${assignmentDetails.periodName}`;
@@ -286,9 +289,16 @@ This is an automated message. Please do not reply to this email.
               <p><strong>Route Number:</strong> #${assignmentDetails.routeNumber}</p>
               <p><strong>Origin:</strong> ${assignmentDetails.origin}</p>
               <p><strong>Destination:</strong> ${assignmentDetails.destination}</p>
+              ${assignmentDetails.days && assignmentDetails.startTime && assignmentDetails.endTime ? `
+              <p><strong>Schedule:</strong> ${assignmentDetails.days} | ${assignmentDetails.startTime} - ${assignmentDetails.endTime}</p>
+              ` : ''}
             </div>
             
             <p>Please log in to the driver portal for complete route details and schedules.</p>
+            
+            <div style="text-align: center; margin: 20px 0;">
+              <a href="${process.env.APP_URL || 'http://localhost:3001'}" class="button" style="background-color: #7c3aed; color: white; padding: 12px 30px; text-decoration: none; border-radius: 5px; display: inline-block;">Driver Portal</a>
+            </div>
             
             <p>If you have any questions about your assignment, please contact your supervisor.</p>
             
@@ -313,9 +323,12 @@ ${assignmentText}
 Your Assigned Route:
 - Route Number: #${assignmentDetails.routeNumber}
 - Origin: ${assignmentDetails.origin}
-- Destination: ${assignmentDetails.destination}
+- Destination: ${assignmentDetails.destination}${assignmentDetails.days && assignmentDetails.startTime && assignmentDetails.endTime ? `
+- Schedule: ${assignmentDetails.days} | ${assignmentDetails.startTime} - ${assignmentDetails.endTime}` : ''}
 
 Please log in to the driver portal for complete route details and schedules.
+
+Driver Portal: ${process.env.APP_URL || 'http://localhost:3001'}
 
 If you have any questions about your assignment, please contact your supervisor.
 
@@ -337,6 +350,113 @@ This is an automated message. Please do not reply to this email.
     const s = ['th', 'st', 'nd', 'rd'];
     const v = n % 100;
     return n + (s[(v - 20) % 10] || s[v] || s[0]);
+  }
+
+  async sendSelectionPeriodReminder(
+    recipientEmail: string,
+    recipientName: string,
+    periodDetails: {
+      name: string;
+      endDate: Date;
+    }
+  ): Promise<void> {
+    const subject = `Reminder: Route Selection Period Closing Soon - ${periodDetails.name}`;
+    
+    const html = `
+      <!DOCTYPE html>
+      <html>
+      <head>
+        <style>
+          body { font-family: Arial, sans-serif; line-height: 1.6; color: #333; }
+          .container { max-width: 600px; margin: 0 auto; padding: 20px; }
+          .header { background-color: #dc2626; color: white; padding: 20px; text-align: center; }
+          .content { background-color: #f9f9f9; padding: 20px; }
+          .button { background-color: #7c3aed; color: white; padding: 12px 30px; text-decoration: none; border-radius: 5px; display: inline-block; margin: 20px 0; }
+          .footer { text-align: center; padding: 20px; color: #666; font-size: 12px; }
+          .warning { background-color: #fee2e2; border: 2px solid #dc2626; padding: 15px; border-radius: 5px; margin: 20px 0; }
+          .countdown { font-size: 24px; font-weight: bold; color: #dc2626; text-align: center; margin: 20px 0; }
+        </style>
+      </head>
+      <body>
+        <div class="container">
+          <div class="header">
+            <h1>⏰ Route Selection Period Closing Soon!</h1>
+          </div>
+          <div class="content">
+            <p>Dear ${recipientName},</p>
+            
+            <div class="warning">
+              <strong>IMPORTANT:</strong> The route selection period "<strong>${periodDetails.name}</strong>" will close tomorrow!
+            </div>
+            
+            <div class="countdown">
+              Closing Date: ${periodDetails.endDate.toLocaleDateString()}
+            </div>
+            
+            <p>If you have not yet submitted your route preferences, please do so immediately to ensure you are considered for route assignments.</p>
+            
+            <h3>Quick Reminder - How to Submit:</h3>
+            <ol>
+              <li>Log in to your driver portal</li>
+              <li>Navigate to "Route Selection"</li>
+              <li>Select up to 3 route preferences in order of priority</li>
+              <li>Submit your selections</li>
+            </ol>
+            
+            <p style="text-align: center; font-weight: bold; color: #dc2626;">
+              Drivers who do not submit their preferences will be assigned to the float pool.
+            </p>
+            
+            <div style="text-align: center;">
+              <a href="${process.env.APP_URL || 'http://localhost:3001'}/login" class="button">Go to Driver Portal</a>
+            </div>
+            
+            <p><strong>Need help?</strong> Contact your supervisor immediately if you're having trouble accessing the portal or submitting your selections.</p>
+            
+            <p>Thank you,<br>Route Selection Team</p>
+          </div>
+          <div class="footer">
+            <p>This is an automated reminder. Please do not reply to this email.</p>
+            <p>&copy; 2024 Route Selection System. All rights reserved.</p>
+          </div>
+        </div>
+      </body>
+      </html>
+    `;
+
+    const text = `
+Dear ${recipientName},
+
+IMPORTANT: The route selection period "${periodDetails.name}" will close tomorrow!
+
+Closing Date: ${periodDetails.endDate.toLocaleDateString()}
+
+If you have not yet submitted your route preferences, please do so immediately to ensure you are considered for route assignments.
+
+Quick Reminder - How to Submit:
+1. Log in to your driver portal
+2. Navigate to "Route Selection"
+3. Select up to 3 route preferences in order of priority
+4. Submit your selections
+
+Drivers who do not submit their preferences will be assigned to the float pool.
+
+Driver Portal: ${process.env.APP_URL || 'http://localhost:3001'}/login
+
+Need help? Contact your supervisor immediately if you're having trouble accessing the portal or submitting your selections.
+
+Thank you,
+Route Selection Team
+
+This is an automated reminder. Please do not reply to this email.
+`;
+
+    await this.sendEmail({
+      to: recipientEmail,
+      subject,
+      text,
+      html,
+    });
   }
 
   async sendPasswordResetEmail(

@@ -19,6 +19,9 @@ import passwordResetRoutes from './routes/passwordReset.js';
 import userRoutes from './routes/users.js';
 import terminalRoutes from './routes/terminals.js';
 
+// Import scheduler service
+import schedulerService from './services/scheduler.js';
+
 const app = express();
 const PORT = process.env.PORT || 3001;
 
@@ -77,6 +80,7 @@ app.listen(PORT, () => {
   console.log(`📋 Health check: http://localhost:${PORT}/health`);
   console.log(`🔐 API Base URL: http://localhost:${PORT}/api`);
   console.log(`📚 Environment: ${process.env.NODE_ENV || 'development'}`);
+  console.log(`⏰ Scheduler service started - checking daily for selection period reminders`);
 });
 
 export default app;

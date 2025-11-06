@@ -60,7 +60,7 @@ const ProcessSelections = () => {
   // Process selections mutation
   const processMutation = useMutation({
     mutationFn: async () => {
-      const response = await apiClient.post(`/selections/process/${periodId}`);
+      const response = await apiClient.post(`/assignments/process/${periodId}`);
       return response.data;
     },
     onSuccess: (data) => {
@@ -223,7 +223,7 @@ const ProcessSelections = () => {
             </p>
             <button
               onClick={() => processMutation.mutate()}
-              disabled={processMutation.isPending || period?.status !== 'OPEN'}
+              disabled={processMutation.isPending || (period?.status !== 'CLOSED' && period?.status !== 'PROCESSING')}
               className="inline-flex items-center px-6 py-3 bg-primary-600 hover:bg-primary-700 text-white font-medium rounded-lg transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
             >
               {processMutation.isPending ? (
